@@ -14,6 +14,9 @@ data class EntryView(
     val foodName: String,
     val grams: Double,
     val kcal: Double,
+    val kcalPer100g: Double = 0.0,
+    val unitLabel: String? = null,
+    val unitGrams: Double? = null,
 )
 
 fun EntryEntity.toView(): EntryView = EntryView(
@@ -23,6 +26,19 @@ fun EntryEntity.toView(): EntryView = EntryView(
     foodName = foodName,
     grams = grams,
     kcal = kcal,
+    kcalPer100g = kcalPer100g,
+)
+
+fun EntryUnitRow.toView(): EntryView = EntryView(
+    id = id,
+    date = LocalDate.parse(date),
+    meal = runCatching { MealType.valueOf(meal) }.getOrDefault(MealType.SNACK),
+    foodName = foodName,
+    grams = grams,
+    kcal = kcal,
+    kcalPer100g = kcalPer100g,
+    unitLabel = unitLabel,
+    unitGrams = unitGrams,
 )
 
 class MealRepository(private val db: MealDatabase) {
@@ -32,7 +48,7 @@ class MealRepository(private val db: MealDatabase) {
     private val statsDao = db.statsDao()
 
     fun entriesFor(date: LocalDate): Flow<List<EntryView>> =
-        entryDao.observeForDate(date.toString()).map { list -> list.map { it.toView() } }
+        entryDao.observeForDateWithUnit(date.toString()).map { list -> list.map { it.toView() } }
 
     fun entriesBetween(from: LocalDate, to: LocalDate): Flow<List<EntryView>> =
         entryDao.observeBetween(from.toString(), to.toString()).map { list -> list.map { it.toView() } }
@@ -69,14 +85,20 @@ class MealRepository(private val db: MealDatabase) {
         entryDao.byId(entryId)?.let { entryDao.delete(it) }
     }
 
-    suspend fun addCustomFood(name: String, kcalPer100g: Double, category: String): Long =
+    suspend fun addCustomFood(
+        name: String,
+        kcalPer100g: Double,
+        category: String,
+        unitLabel: String? = null,
+        unitGrams: Double? = null,
+    ): Long =
         foodDao.insert(
             FoodEntity(
                 name = name,
                 kcalPer100g = kcalPer100g,
                 category = category,
-                unitLabel = null,
-                unitGrams = null,
+                unitLabel = unitLabel,
+                unitGrams = unitGrams,
                 isBuiltin = false,
                 createdAt = System.currentTimeMillis(),
             ),

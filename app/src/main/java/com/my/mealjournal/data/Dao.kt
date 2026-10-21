@@ -45,6 +45,14 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE date = :date ORDER BY CASE meal WHEN 'BREAKFAST' THEN 0 WHEN 'LUNCH' THEN 1 WHEN 'DINNER' THEN 2 ELSE 3 END, createdAt")
     fun observeForDate(date: String): Flow<List<EntryEntity>>
 
+    @Query(
+        "SELECT e.*, f.unitLabel AS unitLabel, f.unitGrams AS unitGrams " +
+            "FROM entries e LEFT JOIN foods f ON f.id = e.foodId " +
+            "WHERE e.date = :date " +
+            "ORDER BY CASE e.meal WHEN 'BREAKFAST' THEN 0 WHEN 'LUNCH' THEN 1 WHEN 'DINNER' THEN 2 ELSE 3 END, e.createdAt",
+    )
+    fun observeForDateWithUnit(date: String): Flow<List<EntryUnitRow>>
+
     @Query("SELECT * FROM entries WHERE date BETWEEN :from AND :to ORDER BY date, createdAt")
     fun observeBetween(from: String, to: String): Flow<List<EntryEntity>>
 
@@ -81,3 +89,18 @@ interface StatsDao {
 }
 
 data class DailyTotal(val date: String, val kcal: Double)
+
+/** 条目 + 对应食物当前的份量信息；食物被删掉时为 null，列表只显示克数。 */
+data class EntryUnitRow(
+    val id: Long,
+    val date: String,
+    val meal: String,
+    val foodId: Long?,
+    val foodName: String,
+    val kcalPer100g: Double,
+    val grams: Double,
+    val kcal: Double,
+    val createdAt: Long,
+    val unitLabel: String?,
+    val unitGrams: Double?,
+)

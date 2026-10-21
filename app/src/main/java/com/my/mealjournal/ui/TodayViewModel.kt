@@ -99,16 +99,21 @@ class TodayViewModel(
 @OptIn(ExperimentalCoroutinesApi::class)
 class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
 
-    private val query = MutableStateFlow("")
-    val foods: StateFlow<List<FoodEntity>> = query
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
+    val foods: StateFlow<List<FoodEntity>> = _query
         .flatMapLatest { q -> repo.foods(q) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun search(text: String) {
-        query.value = text
+        _query.value = text
     }
 
-    fun addCustom(name: String, kcalPer100g: Double, category: String) {
-        viewModelScope.launch { repo.addCustomFood(name, kcalPer100g, category) }
+    fun clearQuery() {
+        _query.value = ""
+    }
+
+    fun addCustom(name: String, kcalPer100g: Double, category: String, unitLabel: String?, unitGrams: Double?) {
+        viewModelScope.launch { repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams) }
     }
 }

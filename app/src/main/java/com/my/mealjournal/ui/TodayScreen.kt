@@ -39,11 +39,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +67,7 @@ import com.my.mealjournal.data.FoodEntity
 import com.my.mealjournal.domain.DayStatus
 import com.my.mealjournal.domain.MealTiming
 import com.my.mealjournal.domain.MealType
+import com.my.mealjournal.domain.Portion
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -300,7 +305,7 @@ private fun MealSection(
                         Column(Modifier.weight(1f)) {
                             Text(entry.foodName, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = "${entry.grams.trimZero()} g",
+                                text = Portion.describe(entry.grams, entry.unitLabel, entry.unitGrams),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -329,14 +334,19 @@ private fun AddEntrySheet(
     onAdd: (FoodEntity, Double, MealType) -> Unit,
 ) {
     val picker: FoodPickerViewModel = appViewModel { FoodPickerViewModel(it.repository) }
-    var query by remember { mutableStateOf("") }
     var meal by remember { mutableStateOf(initialMeal) }
     var selected by remember { mutableStateOf<FoodEntity?>(null) }
-    var grams by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var portionMode by remember { mutableStateOf(false) }
     var customDialog by remember { mutableStateOf(false) }
 
+    val query by picker.query.collectAsStateWithLifecycle()
     val foods by picker.foods.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    DisposableEffect(Unit) {
+        onDispose { picker.clearQuery() }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(Modifier.padding(horizontal = 16.dp)) {
@@ -366,10 +376,7 @@ private fun AddEntrySheet(
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = query,
-                onValueChange = {
-                    query = it
-                    picker.search(it)
-                },
+                onValueChange = { picker.search(it) },
                 label = { Text("搜索食物") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -381,7 +388,14 @@ private fun AddEntrySheet(
                             .fillMaxWidth()
                             .clickable {
                                 selected = food
-                                grams = (food.unitGrams ?: 100.0).trimZero()
+                                val unit = food.unitGrams
+                                if (food.unitLabel != null && unit != null && unit > 0) {
+                                    portionMode = true
+                                    amount = "1"
+                                } else {
+                                    portionMode = false
+                                    amount = (unit ?: 100.0).trimZero()
+                                }
                             }
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -405,11 +419,48 @@ private fun AddEntrySheet(
                 }
             }
             selected?.let { food ->
+                val unitLabel = food.unitLabel
+                val unitGrams = food.unitGrams
+                val hasUnit = unitLabel != null && unitGrams != null && unitGrams > 0
+                val gramsNow = amount.toDoubleOrNull()?.let { value ->
+                    if (portionMode && hasUnit) Portion.gramsOf(value, unitGrams!!) else value
+                }
+
+                if (hasUnit) {
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = !portionMode,
+                            onClick = {
+                                val value = amount.toDoubleOrNull()
+                                if (portionMode && value != null && value > 0) {
+                                    amount = Portion.label(Portion.gramsOf(value, unitGrams!!))
+                                }
+                                portionMode = false
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            icon = {},
+                        ) { Text("克") }
+                        SegmentedButton(
+                            selected = portionMode,
+                            onClick = {
+                                val value = amount.toDoubleOrNull()
+                                if (!portionMode && value != null && value > 0) {
+                                    amount = Portion.label(Portion.portionOf(value, unitGrams!!))
+                                }
+                                portionMode = true
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            icon = {},
+                        ) { Text(unitLabel!!) }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
-                        value = grams,
-                        onValueChange = { grams = it },
-                        label = { Text("克数") },
+                        value = amount,
+                        onValueChange = { amount = it },
+                        label = { Text(if (portionMode && hasUnit) "份数" else "克数") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.weight(1f),
@@ -417,13 +468,14 @@ private fun AddEntrySheet(
                     Spacer(Modifier.width(12.dp))
                     FilledTonalButton(
                         onClick = {
-                            val g = grams.toDoubleOrNull() ?: return@FilledTonalButton
+                            val g = gramsNow ?: return@FilledTonalButton
                             if (g > 0) onAdd(food, g, meal)
                         },
                     ) { Text("添加") }
                 }
                 Text(
-                    text = "约 ${(food.kcalPer100g * (grams.toDoubleOrNull() ?: 0.0) / 100).toInt()} kcal",
+                    text = "约 ${(food.kcalPer100g * (gramsNow ?: 0.0) / 100).toInt()} kcal" +
+                        if (portionMode && hasUnit) " · ${Portion.label(gramsNow ?: 0.0)} g" else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -435,8 +487,8 @@ private fun AddEntrySheet(
     if (customDialog) {
         CustomFoodDialog(
             onDismiss = { customDialog = false },
-            onConfirm = { name, kcal, category ->
-                picker.addCustom(name, kcal, category)
+            onConfirm = { name, kcal, category, unitLabel, unitGrams ->
+                picker.addCustom(name, kcal, category, unitLabel, unitGrams)
                 customDialog = false
             },
         )
@@ -446,16 +498,28 @@ private fun AddEntrySheet(
 @Composable
 fun CustomFoodDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, Double, String) -> Unit,
+    onConfirm: (String, Double, String, String?, Double?) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var kcal by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("自定义") }
+    var unitLabel by remember { mutableStateOf("") }
+    var unitGrams by remember { mutableStateOf("") }
+
+    val kcalValue = kcal.toDoubleOrNull()
+    val gramsValue = unitGrams.toDoubleOrNull()
+    val unitPairOk = (unitLabel.isBlank() && unitGrams.isBlank()) ||
+        (unitLabel.isNotBlank() && gramsValue != null && gramsValue > 0)
+    val canSave = name.isNotBlank() && kcalValue != null && kcalValue > 0 && unitPairOk
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("自定义食物") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, singleLine = true)
                 OutlinedTextField(
                     value = kcal,
@@ -465,13 +529,49 @@ fun CustomFoodDialog(
                     singleLine = true,
                 )
                 OutlinedTextField(value = category, onValueChange = { category = it }, label = { Text("分类") }, singleLine = true)
+                Text(
+                    text = "常用份量（可留空，留空就只能填克数）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = unitLabel,
+                        onValueChange = { unitLabel = it },
+                        label = { Text("单位，如 碗") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = unitGrams,
+                        onValueChange = { unitGrams = it },
+                        label = { Text("每份克数") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (!unitPairOk) {
+                    Text(
+                        text = "单位和每份克数要么都填，要么都留空",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
+                enabled = canSave,
                 onClick = {
-                    val value = kcal.toDoubleOrNull() ?: return@TextButton
-                    if (name.isNotBlank() && value > 0) onConfirm(name.trim(), value, category.trim().ifBlank { "自定义" })
+                    if (!canSave) return@TextButton
+                    onConfirm(
+                        name.trim(),
+                        kcalValue!!,
+                        category.trim().ifBlank { "自定义" },
+                        unitLabel.trim().ifBlank { null },
+                        gramsValue,
+                    )
                 },
             ) { Text("保存") }
         },
@@ -486,24 +586,66 @@ private fun EditEntryDialog(
     onSave: (Double) -> Unit,
     onDelete: () -> Unit,
 ) {
-    var grams by remember { mutableStateOf(entry.grams.trimZero()) }
+    val unitLabel = entry.unitLabel
+    val unitGrams = entry.unitGrams
+    val hasUnit = unitLabel != null && unitGrams != null && unitGrams > 0
+    var portionMode by remember { mutableStateOf(false) }
+    var amount by remember { mutableStateOf(entry.grams.trimZero()) }
+    val gramsNow = amount.toDoubleOrNull()?.let { value ->
+        if (portionMode && hasUnit) Portion.gramsOf(value, unitGrams!!) else value
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(entry.foodName) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${entry.meal.label} · 原记录 ${entry.kcal.toInt()} kcal")
+                if (hasUnit) {
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = !portionMode,
+                            onClick = {
+                                val value = amount.toDoubleOrNull()
+                                if (portionMode && value != null && value > 0) {
+                                    amount = Portion.label(Portion.gramsOf(value, unitGrams!!))
+                                }
+                                portionMode = false
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            icon = {},
+                        ) { Text("克") }
+                        SegmentedButton(
+                            selected = portionMode,
+                            onClick = {
+                                val value = amount.toDoubleOrNull()
+                                if (!portionMode && value != null && value > 0) {
+                                    amount = Portion.label(Portion.portionOf(value, unitGrams!!))
+                                }
+                                portionMode = true
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            icon = {},
+                        ) { Text(unitLabel!!) }
+                    }
+                }
                 OutlinedTextField(
-                    value = grams,
-                    onValueChange = { grams = it },
-                    label = { Text("克数") },
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text(if (portionMode && hasUnit) "份数" else "克数") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
+                )
+                Text(
+                    text = "现在约 ${(entry.kcalPer100g * (gramsNow ?: 0.0) / 100).toInt()} kcal" +
+                        if (portionMode && hasUnit) " · ${Portion.label(gramsNow ?: 0.0)} g" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { grams.toDoubleOrNull()?.let { if (it > 0) onSave(it) } }) { Text("保存") }
+            TextButton(onClick = { gramsNow?.let { if (it > 0) onSave(it) } }) { Text("保存") }
         },
         dismissButton = {
             Row {
@@ -518,4 +660,4 @@ private fun EditEntryDialog(
     )
 }
 
-fun Double.trimZero(): String = if (this % 1.0 == 0.0) toInt().toString() else "%.1f".format(this)
+fun Double.trimZero(): String = Portion.label(this)

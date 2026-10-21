@@ -19,7 +19,7 @@ object FoodSeed {
     private fun f(name: String, kcal: Double, category: String, unit: String? = null, grams: Double? = null) =
         SeedFood(name, kcal, category, unit, grams)
 
-    fun builtins(): List<SeedFood> = listOf(
+    private val base: List<SeedFood> = listOf(
         // 主食
         f("米饭", 116.0, "主食", "碗", 150.0),
         f("糙米饭", 112.0, "主食", "碗", 150.0),
@@ -195,4 +195,46 @@ object FoodSeed {
         f("沙拉酱", 724.0, "调味", "勺", 15.0),
         f("老干妈", 640.0, "调味", "勺", 15.0),
     )
+
+    /**
+     * 长尾高频食物补的常用份量（1 份 = ? g）。
+     * 只作用于还没写份量的内置食物；已有份量的以条目前面的值为准。
+     * 新增/修改这里之后必须同步提升数据库版本，迁移会把这些单位补到老数据上。
+     */
+    private val portionOverrides: Map<String, Pair<String, Double>> = mapOf(
+        "三文鱼" to ("份" to 100.0),
+        "牛肉（瘦）" to ("份" to 100.0),
+        "猪里脊" to ("份" to 100.0),
+        "五花肉" to ("份" to 100.0),
+        "鸡胸肉" to ("块" to 120.0),
+        "虾仁" to ("份" to 100.0),
+        "豆腐" to ("块" to 200.0),
+        "豆干" to ("份" to 100.0),
+        "腐竹" to ("份" to 50.0),
+        "西兰花" to ("份" to 100.0),
+        "菠菜" to ("把" to 250.0),
+        "生菜" to ("份" to 100.0),
+        "大白菜" to ("份" to 200.0),
+        "香菇" to ("份" to 100.0),
+        "金针菇" to ("把" to 150.0),
+        "南瓜" to ("份" to 100.0),
+        "莲藕" to ("节" to 150.0),
+        "玉米粒" to ("份" to 100.0),
+        "葡萄" to ("串" to 200.0),
+        "蓝莓" to ("盒" to 125.0),
+        "樱桃" to ("份" to 100.0),
+        "菠萝" to ("块" to 150.0),
+        "柚子" to ("瓣" to 100.0),
+        "花生" to ("把" to 30.0),
+        "瓜子" to ("把" to 30.0),
+        "开心果" to ("把" to 30.0),
+        "年糕" to ("份" to 100.0),
+        "燕麦片（干）" to ("份" to 40.0),
+    )
+
+    fun builtins(): List<SeedFood> = base.map { seed ->
+        val extra = portionOverrides[seed.name] ?: return@map seed
+        if (seed.unitLabel != null) seed
+        else seed.copy(unitLabel = extra.first, unitGrams = extra.second)
+    }
 }

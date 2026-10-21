@@ -130,8 +130,8 @@ class FoodsViewModel(private val repo: MealRepository) : ViewModel() {
     val foods: StateFlow<List<FoodEntity>> = repo.customFoods()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun add(name: String, kcalPer100g: Double, category: String) {
-        viewModelScope.launch { repo.addCustomFood(name, kcalPer100g, category) }
+    fun add(name: String, kcalPer100g: Double, category: String, unitLabel: String?, unitGrams: Double?) {
+        viewModelScope.launch { repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams) }
     }
 
     fun delete(food: FoodEntity) {
