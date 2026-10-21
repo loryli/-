@@ -1,0 +1,102 @@
+package com.my.mealjournal.data
+
+import com.my.mealjournal.domain.CsvExporter
+import com.my.mealjournal.domain.MealType
+import java.time.LocalDate
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+/** 单条记录在 UI 层的样子：只保留展示与计算需要的字段。 */
+data class EntryView(
+    val id: Long,
+    val date: LocalDate,
+    val meal: MealType,
+    val foodName: String,
+    val grams: Double,
+    val kcal: Double,
+)
+
+fun EntryEntity.toView(): EntryView = EntryView(
+    id = id,
+    date = LocalDate.parse(date),
+    meal = runCatching { MealType.valueOf(meal) }.getOrDefault(MealType.SNACK),
+    foodName = foodName,
+    grams = grams,
+    kcal = kcal,
+)
+
+class MealRepository(private val db: MealDatabase) {
+
+    private val foodDao = db.foodDao()
+    private val entryDao = db.entryDao()
+    private val statsDao = db.statsDao()
+
+    fun entriesFor(date: LocalDate): Flow<List<EntryView>> =
+        entryDao.observeForDate(date.toString()).map { list -> list.map { it.toView() } }
+
+    fun entriesBetween(from: LocalDate, to: LocalDate): Flow<List<EntryView>> =
+        entryDao.observeBetween(from.toString(), to.toString()).map { list -> list.map { it.toView() } }
+
+    fun foods(query: String): Flow<List<FoodEntity>> =
+        if (query.isBlank()) foodDao.observeAll() else foodDao.search(query)
+
+    fun customFoods(): Flow<List<FoodEntity>> = foodDao.observeCustom()
+
+    suspend fun addEntry(date: LocalDate, meal: MealType, food: FoodEntity, grams: Double): Long {
+        val kcal = com.my.mealjournal.domain.CalorieMath.kcal(food.kcalPer100g, grams)
+        return entryDao.insert(
+            EntryEntity(
+                date = date.toString(),
+                meal = meal.name,
+                foodId = food.id,
+                foodName = food.name,
+                kcalPer100g = food.kcalPer100g,
+                grams = grams,
+                kcal = kcal,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    suspend fun updateEntryGrams(entryId: Long, grams: Double): Boolean {
+        val existing = entryDao.byId(entryId) ?: return false
+        val kcal = com.my.mealjournal.domain.CalorieMath.kcal(existing.kcalPer100g, grams)
+        entryDao.update(existing.copy(grams = grams, kcal = kcal))
+        return true
+    }
+
+    suspend fun deleteEntry(entryId: Long) {
+        entryDao.byId(entryId)?.let { entryDao.delete(it) }
+    }
+
+    suspend fun addCustomFood(name: String, kcalPer100g: Double, category: String): Long =
+        foodDao.insert(
+            FoodEntity(
+                name = name,
+                kcalPer100g = kcalPer100g,
+                category = category,
+                unitLabel = null,
+                unitGrams = null,
+                isBuiltin = false,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+
+    suspend fun deleteCustomFood(food: FoodEntity) {
+        if (!food.isBuiltin) foodDao.delete(food)
+    }
+
+    suspend fun exportCsv(): String {
+        val rows = entryDao.all().map { entity ->
+            CsvExporter.Row(
+                date = entity.date,
+                meal = runCatching { MealType.valueOf(entity.meal) }.getOrDefault(MealType.SNACK),
+                foodName = entity.foodName,
+                grams = entity.grams,
+                kcalPer100g = entity.kcalPer100g,
+                kcal = entity.kcal,
+            )
+        }
+        return CsvExporter.toCsv(rows)
+    }
+}
