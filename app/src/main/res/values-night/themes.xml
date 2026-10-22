@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 与 Compose 深色主题 DarkPaper 保持一致 -->
     <style name="Theme.MealJournal" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#FF17120D</item>
+        <item name="android:windowBackground">#FF12140F</item>
     </style>
 </resources>
