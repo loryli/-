@@ -122,8 +122,13 @@ private fun DayCell(
 ) {
     val background = when (status) {
         DayStatus.COMPLETE -> MaterialTheme.colorScheme.primaryContainer
-        DayStatus.PARTIAL -> MaterialTheme.colorScheme.tertiaryContainer
+        DayStatus.PARTIAL -> MaterialTheme.colorScheme.secondaryContainer
         DayStatus.MISSING -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val foreground = when (status) {
+        DayStatus.COMPLETE -> MaterialTheme.colorScheme.onPrimaryContainer
+        DayStatus.PARTIAL -> MaterialTheme.colorScheme.onSecondaryContainer
+        DayStatus.MISSING -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val isToday = date == LocalDate.now()
     Box(
@@ -140,12 +145,17 @@ private fun DayCell(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(date.dayOfMonth.toString(), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = date.dayOfMonth.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = foreground,
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+            )
             if (kcal > 0) {
                 Text(
                     text = kcal.toInt().toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = foreground.copy(alpha = 0.75f),
                 )
             }
         }
@@ -156,7 +166,7 @@ private fun DayCell(
 private fun Legend() {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         LegendDot(MaterialTheme.colorScheme.primaryContainer, "三餐记满")
-        LegendDot(MaterialTheme.colorScheme.tertiaryContainer, "记了一部分")
+        LegendDot(MaterialTheme.colorScheme.secondaryContainer, "记了一部分")
         LegendDot(MaterialTheme.colorScheme.surfaceVariant, "没记录")
     }
 }

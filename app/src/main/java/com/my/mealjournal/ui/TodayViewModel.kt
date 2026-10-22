@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -101,19 +102,52 @@ class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
-    val foods: StateFlow<List<FoodEntity>> = _query
-        .flatMapLatest { q -> repo.foods(q) }
+
+    /** null = 全部分类。 */
+    private val _category = MutableStateFlow<String?>(null)
+    val category: StateFlow<String?> = _category.asStateFlow()
+
+    private val _recent = MutableStateFlow<List<FoodEntity>>(emptyList())
+    val recent: StateFlow<List<FoodEntity>> = _recent.asStateFlow()
+
+    /** 内置食物里出现过的分类，保持固定展示顺序。 */
+    val categories: StateFlow<List<String>> = repo.foods("")
+        .map { list -> CATEGORY_ORDER.filter { category -> list.any { it.category == category } } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val foods: StateFlow<List<FoodEntity>> = combine(_query, _category) { q, c -> q to c }
+        .flatMapLatest { (q, c) ->
+            repo.foods(q).map { list -> if (c == null) list else list.filter { it.category == c } }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    init {
+        viewModelScope.launch { _recent.value = repo.recentFoods() }
+    }
 
     fun search(text: String) {
         _query.value = text
     }
 
-    fun clearQuery() {
-        _query.value = ""
+    fun selectCategory(value: String?) {
+        _category.value = value
     }
 
+    fun clearFilters() {
+        _query.value = ""
+        _category.value = null
+    }
+
+    fun clearQuery() = clearFilters()
+
     fun addCustom(name: String, kcalPer100g: Double, category: String, unitLabel: String?, unitGrams: Double?) {
-        viewModelScope.launch { repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams) }
+        viewModelScope.launch {
+            repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams)
+            _recent.value = repo.recentFoods()
+        }
+    }
+
+    companion object {
+        val CATEGORY_ORDER = listOf("主食", "肉蛋", "蔬菜", "水果", "奶豆", "零食", "饮品", "调味")
     }
 }

@@ -81,7 +81,7 @@ fun SettingsScreen(vm: SettingsViewModel) {
     ) {
         Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-        Card(Modifier.fillMaxWidth()) {
+        AppCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("每日目标热量", style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -118,7 +118,7 @@ fun SettingsScreen(vm: SettingsViewModel) {
             }
         }
 
-        Card(Modifier.fillMaxWidth()) {
+        AppCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -164,10 +164,7 @@ fun SettingsScreen(vm: SettingsViewModel) {
             }
         }
 
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
+        AppCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("导出数据", style = MaterialTheme.typography.titleMedium)
                 Text(

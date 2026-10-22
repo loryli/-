@@ -74,15 +74,22 @@ fun FoodsScreen(vm: FoodsViewModel) {
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(foods, key = { it.id }) { food ->
-                        Card(Modifier.fillMaxWidth()) {
+                        AppCard(Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Text(food.name, style = MaterialTheme.typography.bodyLarge)
+                                    val unit = food.unitLabel
+                                    val unitGrams = food.unitGrams
+                                    val portion = if (unit != null && unitGrams != null && unitGrams > 0) {
+                                        " · 1 $unit = ${unitGrams.trimZero()} g"
+                                    } else {
+                                        ""
+                                    }
                                     Text(
-                                        text = "${food.kcalPer100g.toInt()} kcal/100g · ${food.category}",
+                                        text = "${food.kcalPer100g.toInt()} kcal/100g · ${food.category}$portion",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

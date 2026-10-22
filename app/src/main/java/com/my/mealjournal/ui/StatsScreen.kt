@@ -44,7 +44,7 @@ fun StatsScreen(vm: StatsViewModel) {
             StatCard("最长连续", "${state.bestStreak} 天", Modifier.weight(1f))
         }
 
-        Card(Modifier.fillMaxWidth()) {
+        AppCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("热量来源分布", style = MaterialTheme.typography.titleMedium)
                 MealType.entries.forEach { meal ->
@@ -65,10 +65,7 @@ fun StatsScreen(vm: StatsViewModel) {
             }
         }
 
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
+        AppCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("当前连续 ${state.currentStreak} 天", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -88,7 +85,7 @@ fun StatsScreen(vm: StatsViewModel) {
 
 @Composable
 private fun StatCard(title: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier) {
+    AppCard(modifier) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)

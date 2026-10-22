@@ -58,6 +58,14 @@ class MealRepository(private val db: MealDatabase) {
 
     fun customFoods(): Flow<List<FoodEntity>> = foodDao.observeCustom()
 
+    /** 最近 30 天内记过、且食物仍然存在的条目，按最近一次记录排序。 */
+    suspend fun recentFoods(limit: Int = 6, today: LocalDate = LocalDate.now()): List<FoodEntity> {
+        val ids = entryDao.recentFoodIds(today.minusDays(30).toString(), limit)
+        if (ids.isEmpty()) return emptyList()
+        val byId = foodDao.byIds(ids).associateBy { it.id }
+        return ids.mapNotNull { byId[it] }
+    }
+
     suspend fun addEntry(date: LocalDate, meal: MealType, food: FoodEntity, grams: Double): Long {
         val kcal = com.my.mealjournal.domain.CalorieMath.kcal(food.kcalPer100g, grams)
         return entryDao.insert(

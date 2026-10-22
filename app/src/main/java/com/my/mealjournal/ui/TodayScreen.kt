@@ -2,7 +2,9 @@ package com.my.mealjournal.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,6 +36,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -177,8 +182,10 @@ private fun DateHeader(
 @Composable
 private fun ProgressCard(state: TodayUiState) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
@@ -271,7 +278,13 @@ private fun MealSection(
     onEdit: (EntryView) -> Unit,
 ) {
     val subtotal = entries.sumOf { it.kcal }
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+            .clickable(enabled = editable) { onAdd() },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(meal.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -288,7 +301,7 @@ private fun MealSection(
             }
             if (entries.isEmpty()) {
                 Text(
-                    text = "还没有条目",
+                    text = if (editable) "点这里记一笔" else "还没有条目",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 6.dp),
@@ -341,8 +354,23 @@ private fun AddEntrySheet(
     var customDialog by remember { mutableStateOf(false) }
 
     val query by picker.query.collectAsStateWithLifecycle()
+    val category by picker.category.collectAsStateWithLifecycle()
+    val categories by picker.categories.collectAsStateWithLifecycle()
+    val recent by picker.recent.collectAsStateWithLifecycle()
     val foods by picker.foods.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val choose: (FoodEntity) -> Unit = { food ->
+        selected = food
+        val unit = food.unitGrams
+        if (food.unitLabel != null && unit != null && unit > 0) {
+            portionMode = true
+            amount = "1"
+        } else {
+            portionMode = false
+            amount = (unit ?: 100.0).trimZero()
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose { picker.clearQuery() }
@@ -381,22 +409,53 @@ private fun AddEntrySheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            LazyColumn(Modifier.weight(1f, fill = false).height(360.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = category == null,
+                    onClick = { picker.selectCategory(null) },
+                    label = { Text("全部") },
+                )
+                categories.forEach { item ->
+                    FilterChip(
+                        selected = category == item,
+                        onClick = { picker.selectCategory(item) },
+                        label = { Text(item) },
+                    )
+                }
+            }
+            if (query.isBlank() && category == null && recent.isNotEmpty()) {
+                Text(
+                    text = "最近记录",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    recent.forEach { food ->
+                        SuggestionChip(
+                            onClick = { choose(food) },
+                            label = { Text(food.name) },
+                        )
+                    }
+                }
+            }
+            LazyColumn(Modifier.weight(1f, fill = false).height(300.dp)) {
                 items(foods, key = { it.id }) { food ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                selected = food
-                                val unit = food.unitGrams
-                                if (food.unitLabel != null && unit != null && unit > 0) {
-                                    portionMode = true
-                                    amount = "1"
-                                } else {
-                                    portionMode = false
-                                    amount = (unit ?: 100.0).trimZero()
-                                }
-                            }
+                            .clickable { choose(food) }
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -460,7 +519,7 @@ private fun AddEntrySheet(
                     OutlinedTextField(
                         value = amount,
                         onValueChange = { amount = it },
-                        label = { Text(if (portionMode && hasUnit) "份数" else "克数") },
+                        label = { Text(if (portionMode && hasUnit) "数量" else "克数") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.weight(1f),
@@ -632,7 +691,7 @@ private fun EditEntryDialog(
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it },
-                    label = { Text(if (portionMode && hasUnit) "份数" else "克数") },
+                    label = { Text(if (portionMode && hasUnit) "数量" else "克数") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                 )

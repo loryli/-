@@ -23,6 +23,9 @@ interface FoodDao {
     @Query("SELECT * FROM foods WHERE id = :id")
     suspend fun byId(id: Long): FoodEntity?
 
+    @Query("SELECT * FROM foods WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<Long>): List<FoodEntity>
+
     @Query("SELECT COUNT(*) FROM foods")
     suspend fun count(): Int
 
@@ -44,6 +47,13 @@ interface EntryDao {
 
     @Query("SELECT * FROM entries WHERE date = :date ORDER BY CASE meal WHEN 'BREAKFAST' THEN 0 WHEN 'LUNCH' THEN 1 WHEN 'DINNER' THEN 2 ELSE 3 END, createdAt")
     fun observeForDate(date: String): Flow<List<EntryEntity>>
+
+    /** 最近吃过什么：按最后一条记录时间倒序，用于添加面板的「最近记录」捷径。 */
+    @Query(
+        "SELECT foodId FROM entries WHERE foodId IS NOT NULL AND date >= :since " +
+            "GROUP BY foodId ORDER BY MAX(createdAt) DESC LIMIT :limit",
+    )
+    suspend fun recentFoodIds(since: String, limit: Int): List<Long>
 
     @Query(
         "SELECT e.*, f.unitLabel AS unitLabel, f.unitGrams AS unitGrams " +
