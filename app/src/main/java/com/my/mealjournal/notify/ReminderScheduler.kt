@@ -10,9 +10,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.my.mealjournal.domain.MealType
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
@@ -70,7 +73,8 @@ class ReminderScheduler(private val context: Context) {
         const val CHANNEL_ID = "daily_reminder"
 
         fun nextTrigger(minuteOfDay: Int, now: LocalDateTime): Long {
-            var target = now.toLocalDate().atTime(LocalTime.ofSecondOfDay(minuteOfDay.toLong()))
+            val safe = ((minuteOfDay % 1440) + 1440) % 1440
+            var target = now.toLocalDate().atTime(LocalTime.of(safe / 60, safe % 60))
             if (!target.isAfter(now)) target = target.plusDays(1)
             return target.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         }
@@ -83,11 +87,30 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ACTION_REMIND) return
         val minute = intent.getIntExtra(EXTRA_MINUTE, 20 * 60)
-        notifyToday(context)
-        ReminderScheduler(context).apply(enabled = true, minuteOfDay = minute)
+        val pending = goAsync()
+        val app = context.applicationContext as? com.my.mealjournal.MealApp
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val missing = app?.let { missingMeals(it) }.orEmpty()
+                // 三餐都记全了就别打扰。
+                if (missing.isNotEmpty()) notifyToday(context, missing)
+                app?.reminderScheduler?.apply(enabled = true, minuteOfDay = minute)
+            } catch (t: Throwable) {
+                Log.w(TAG, "reminder failed", t)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 
-    private fun notifyToday(context: Context) {
+    /** 今天还差哪几餐（加餐不算打卡）。 */
+    private suspend fun missingMeals(app: com.my.mealjournal.MealApp): List<MealType> {
+        val done = app.repository.entriesFor(LocalDate.now()).first().map { it.meal }.toSet()
+        return listOf(MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER)
+            .filterNot { it in done }
+    }
+
+    private fun notifyToday(context: Context, missing: List<MealType>) {
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -107,17 +130,25 @@ class ReminderReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val names = missing.joinToString("、") { it.label }
+        val title = if (missing.size >= 3) "今天还没开始记" else "今天还差 $names"
+        val text = if (missing.size >= 3) {
+            "花 10 秒补一条，别让打卡断在今天。"
+        } else {
+            "补上 $names 就完整打卡了。"
+        }
         val notification = NotificationCompat.Builder(context, ReminderScheduler.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("今天的三餐记了吗？")
-            .setContentText("花 10 秒补一条，别让今天的打卡断掉。")
+            .setContentTitle(title)
+            .setContentText(text)
             .setAutoCancel(true)
             .setContentIntent(content)
             .build()
         try {
             manager.notify(NOTIFY_ID, notification)
-        } catch (_: SecurityException) {
-            // 没给通知权限就静默跳过，不崩 App。
+        } catch (t: Throwable) {
+            // 没给通知权限时静默跳过，不崩 App。
+            Log.w(TAG, "notify failed", t)
         }
     }
 
@@ -138,6 +169,7 @@ class ReminderReceiver : BroadcastReceiver() {
         const val ACTION_REMIND = "com.my.mealjournal.action.REMIND"
         const val EXTRA_MINUTE = "minute"
         const val NOTIFY_ID = 4101
+        private const val TAG = "MealReminder"
     }
 }
 

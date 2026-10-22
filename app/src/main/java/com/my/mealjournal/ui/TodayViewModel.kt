@@ -2,6 +2,7 @@ package com.my.mealjournal.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.my.mealjournal.data.EntryEntity
 import com.my.mealjournal.data.EntryView
 import com.my.mealjournal.data.FoodEntity
 import com.my.mealjournal.data.MealRepository
@@ -84,12 +85,31 @@ class TodayViewModel(
         _date.value = day
     }
 
+    private var lastAddedId: Long? = null
+    private var lastDeleted: EntryEntity? = null
+
     fun addEntry(food: FoodEntity, grams: Double, meal: MealType) {
-        viewModelScope.launch { repo.addEntry(_date.value, meal, food, grams) }
+        viewModelScope.launch {
+            lastAddedId = repo.addEntry(_date.value, meal, food, grams)
+        }
+    }
+
+    fun undoAdd() {
+        val id = lastAddedId ?: return
+        lastAddedId = null
+        viewModelScope.launch { repo.deleteEntry(id) }
     }
 
     fun deleteEntry(id: Long) {
-        viewModelScope.launch { repo.deleteEntry(id) }
+        viewModelScope.launch {
+            lastDeleted = repo.deleteEntryReturning(id)
+        }
+    }
+
+    fun undoDelete() {
+        val entry = lastDeleted ?: return
+        lastDeleted = null
+        viewModelScope.launch { repo.restoreEntry(entry) }
     }
 
     fun updateGrams(id: Long, grams: Double) {
@@ -107,8 +127,8 @@ class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
     private val _category = MutableStateFlow<String?>(null)
     val category: StateFlow<String?> = _category.asStateFlow()
 
-    private val _recent = MutableStateFlow<List<FoodEntity>>(emptyList())
-    val recent: StateFlow<List<FoodEntity>> = _recent.asStateFlow()
+    private val _recent = MutableStateFlow<List<RecentFood>>(emptyList())
+    val recent: StateFlow<List<RecentFood>> = _recent.asStateFlow()
 
     /** 内置食物里出现过的分类，保持固定展示顺序。 */
     val categories: StateFlow<List<String>> = repo.foods("")
@@ -122,7 +142,18 @@ class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
-        viewModelScope.launch { _recent.value = repo.recentFoods() }
+        refreshRecent()
+    }
+
+    private fun refreshRecent() {
+        viewModelScope.launch {
+            _recent.value = repo.recentFoods().map { food ->
+                val last = repo.lastGrams(food.id)
+                    ?: food.unitGrams
+                    ?: 100.0
+                RecentFood(food, last)
+            }
+        }
     }
 
     fun search(text: String) {
@@ -143,7 +174,7 @@ class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
     fun addCustom(name: String, kcalPer100g: Double, category: String, unitLabel: String?, unitGrams: Double?) {
         viewModelScope.launch {
             repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams)
-            _recent.value = repo.recentFoods()
+            refreshRecent()
         }
     }
 
@@ -151,3 +182,6 @@ class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
         val CATEGORY_ORDER = listOf("主食", "肉蛋", "蔬菜", "水果", "奶豆", "零食", "饮品", "调味")
     }
 }
+
+/** 最近记录：食物 + 上次记的克数，点一下就能按原量复记。 */
+data class RecentFood(val food: FoodEntity, val grams: Double)

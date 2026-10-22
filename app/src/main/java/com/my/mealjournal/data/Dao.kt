@@ -75,6 +75,10 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE id = :id")
     suspend fun byId(id: Long): EntryEntity?
 
+    /** 某个食物最后一次记的克数，用于「最近记录」一键复记。 */
+    @Query("SELECT grams FROM entries WHERE foodId = :foodId ORDER BY id DESC LIMIT 1")
+    suspend fun lastGrams(foodId: Long): Double?
+
     @Insert
     suspend fun insert(entry: EntryEntity): Long
 

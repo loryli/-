@@ -1,9 +1,11 @@
 package com.my.mealjournal.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,6 +49,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,13 +63,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -75,12 +85,27 @@ import com.my.mealjournal.domain.MealType
 import com.my.mealjournal.domain.Portion
 import java.time.LocalDate
 import java.time.LocalTime
+import kotlinx.coroutines.launch
 
 @Composable
 fun TodayScreen(vm: TodayViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     var addingMeal by remember { mutableStateOf<MealType?>(null) }
+    var addingFromFab by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<EntryView?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    fun offerUndo(message: String, action: String, onAction: () -> Unit) {
+        scope.launch {
+            val result = snackbar.showSnackbar(
+                message = message,
+                actionLabel = action,
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) onAction()
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
     Column(
@@ -105,15 +130,28 @@ fun TodayScreen(vm: TodayViewModel) {
                 meal = meal,
                 entries = state.entriesByMeal[meal].orEmpty(),
                 editable = state.editable,
-                onAdd = { addingMeal = meal },
+                onAdd = {
+                    addingMeal = meal
+                    addingFromFab = false
+                },
                 onEdit = { editing = it },
             )
         }
         Spacer(Modifier.height(24.dp))
     }
 
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 16.dp, end = 16.dp, bottom = 96.dp),
+        )
+
         ExtendedFloatingActionButton(
-            onClick = { addingMeal = MealTiming.defaultMeal(LocalTime.now()) },
+            onClick = {
+                addingMeal = MealTiming.defaultMeal(LocalTime.now())
+                addingFromFab = true
+            },
             modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
         ) {
             Icon(Icons.Filled.Add, contentDescription = null)
@@ -125,10 +163,12 @@ fun TodayScreen(vm: TodayViewModel) {
     addingMeal?.let { meal ->
         AddEntrySheet(
             initialMeal = meal,
+            showMealPicker = addingFromFab,
             onDismiss = { addingMeal = null },
             onAdd = { food, grams, chosen ->
                 vm.addEntry(food, grams, chosen)
                 addingMeal = null
+                offerUndo("已记 ${food.name}", "撤销") { vm.undoAdd() }
             },
         )
     }
@@ -144,6 +184,7 @@ fun TodayScreen(vm: TodayViewModel) {
             onDelete = {
                 vm.deleteEntry(entry.id)
                 editing = null
+                offerUndo("已删除 ${entry.foodName}", "撤销") { vm.undoDelete() }
             },
         )
     }
@@ -339,10 +380,11 @@ private fun MealSection(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun AddEntrySheet(
     initialMeal: MealType,
+    showMealPicker: Boolean,
     onDismiss: () -> Unit,
     onAdd: (FoodEntity, Double, MealType) -> Unit,
 ) {
@@ -383,23 +425,31 @@ private fun AddEntrySheet(
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { customDialog = true }) { Text("自定义") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MealType.entries.forEach { option ->
-                    Surface(
-                        shape = CircleShape,
-                        color = if (option == meal) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.clickable { meal = option },
-                    ) {
-                        Text(
-                            text = option.label,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (option == meal) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            if (showMealPicker) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MealType.entries.forEach { option ->
+                        Surface(
+                            shape = CircleShape,
+                            color = if (option == meal) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { meal = option },
+                        ) {
+                            Text(
+                                text = option.label,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (option == meal) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
+            } else {
+                Text(
+                    text = "记到 ${meal.label}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
@@ -442,11 +492,22 @@ private fun AddEntrySheet(
                         .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    recent.forEach { food ->
-                        SuggestionChip(
-                            onClick = { choose(food) },
-                            label = { Text(food.name) },
-                        )
+                    recent.forEach { item ->
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.combinedClickable(
+                                onClick = { onAdd(item.food, item.grams, meal) },
+                                onLongClick = { choose(item.food) },
+                            ),
+                        ) {
+                            Text(
+                                text = item.food.name,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -516,12 +577,13 @@ private fun AddEntrySheet(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = amount,
-                        onValueChange = { amount = it },
-                        label = { Text(if (portionMode && hasUnit) "数量" else "克数") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
+                    val inPortion = portionMode && hasUnit
+                    AmountInput(
+                        amount = amount,
+                        onAmountChange = { amount = it },
+                        label = if (inPortion) "数量" else "克数",
+                        step = if (inPortion) 0.5 else 10.0,
+                        longStep = if (inPortion) 5.0 else 50.0,
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(12.dp))
@@ -688,12 +750,14 @@ private fun EditEntryDialog(
                         ) { Text(unitLabel!!) }
                     }
                 }
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { amount = it },
-                    label = { Text(if (portionMode && hasUnit) "数量" else "克数") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
+                val inPortion = portionMode && hasUnit
+                AmountInput(
+                    amount = amount,
+                    onAmountChange = { amount = it },
+                    label = if (inPortion) "数量" else "克数",
+                    step = if (inPortion) 0.5 else 10.0,
+                    longStep = if (inPortion) 5.0 else 50.0,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
                     text = "现在约 ${(entry.kcalPer100g * (gramsNow ?: 0.0) / 100).toInt()} kcal" +
@@ -720,3 +784,61 @@ private fun EditEntryDialog(
 }
 
 fun Double.trimZero(): String = Portion.label(this)
+
+/** 数量输入 + 加减台阶：点一下 ±10g / ±0.5 份，长按 ±50g / ±5 份。 */
+@Composable
+private fun AmountInput(
+    amount: String,
+    onAmountChange: (String) -> Unit,
+    label: String,
+    step: Double,
+    longStep: Double,
+    modifier: Modifier = Modifier,
+) {
+    fun bump(delta: Double) {
+        val current = amount.toDoubleOrNull() ?: 0.0
+        onAmountChange(Portion.label((current + delta).coerceAtLeast(0.0)))
+    }
+
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        StepButton(
+            icon = Icons.Filled.Remove,
+            description = "减少",
+            onClick = { bump(-step) },
+            onLongClick = { bump(-longStep) },
+        )
+        OutlinedTextField(
+            value = amount,
+            onValueChange = onAmountChange,
+            label = { Text(label) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        StepButton(
+            icon = Icons.Filled.Add,
+            description = "增加",
+            onClick = { bump(step) },
+            onLongClick = { bump(longStep) },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StepButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp))
+    }
+}

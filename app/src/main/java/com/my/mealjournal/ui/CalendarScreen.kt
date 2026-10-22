@@ -3,6 +3,7 @@ package com.my.mealjournal.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,9 +25,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -76,7 +81,22 @@ fun CalendarScreen(vm: CalendarViewModel, onPickDate: (LocalDate) -> Unit) {
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        var drag by remember { mutableStateOf(0f) }
+        Column(
+            modifier = Modifier.pointerInput(month) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        when {
+                            drag > 80f -> vm.shiftMonth(-1)
+                            drag < -80f -> vm.shiftMonth(1)
+                        }
+                        drag = 0f
+                    },
+                    onHorizontalDrag = { _, amount -> drag += amount },
+                )
+            },
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             var dayOfMonth = 1
             var week = 0
             while (dayOfMonth <= daysInMonth) {

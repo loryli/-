@@ -93,6 +93,19 @@ class MealRepository(private val db: MealDatabase) {
         entryDao.byId(entryId)?.let { entryDao.delete(it) }
     }
 
+    /** 删除并返回快照，供 5 秒内撤销。 */
+    suspend fun deleteEntryReturning(entryId: Long): EntryEntity? {
+        val existing = entryDao.byId(entryId) ?: return null
+        entryDao.delete(existing)
+        return existing
+    }
+
+    suspend fun restoreEntry(entry: EntryEntity) {
+        entryDao.insert(entry)
+    }
+
+    suspend fun lastGrams(foodId: Long): Double? = entryDao.lastGrams(foodId)
+
     suspend fun addCustomFood(
         name: String,
         kcalPer100g: Double,
