@@ -107,3 +107,41 @@
 | 设置 | 分组 + `AppChip` 档位 + 统一按钮 |
 
 每页改完都要过一遍浅色 / 深色 / 1.3× 字号三张截图。
+
+## 8. 第三阶段 P1：今日页重构（2026-10-22）
+
+范围：只改 `ui/TodayScreen.kt` 的呈现层；ViewModel / Repository / DAO / Room / domain / 导航 / 提醒 / CSV 未动。第二阶段成果先落为本地提交 `380ff1b feat(ui): establish global design system`（未推送）。
+
+### 8.1 结构
+
+| 区块 | 之前 | 现在 |
+| --- | --- | --- |
+| 顶栏 | 「今天」+ 副标题 + 左右箭头 + 「今天」文字按钮 | `DateHeader`：`今天`/`10/21` + 副标题 + 左右箭头；非今日才出现 `回到今天`（`AppButton` Text 风格） |
+| 热量概览 | 圆环 + 三行文字 | `SummaryCard`：左侧大数字 `72 kcal`、右侧「还剩 1728 kcal」、细进度条、「部分打卡」胶囊 + 连续天数 |
+| 四餐 | 四张独立卡片，空餐占一整行提示 | 单张 `SurfaceCard` 内四段分组，`HorizontalDivider` 分隔；空餐把提示收进头行副标题「未记录 · 点这里记一笔」 |
+| 条目行 | `Row` + 自绘文字 + 铅笔图标 | `ListRow`（标题/副标题/右trailing 热量+编辑图标），点击进编辑弹窗 |
+| 主操作 | `ExtendedFloatingActionButton`「记一笔」 | 同一按钮，改 `primaryContainer` 底色、`labelLarge` 文案；滚动内容底部留 120dp |
+| 面板 | 默认 `FilterChip`/`Button`/白底 chip | 餐次与分类改 `AppChip`，「添加」改 `AppButton`，最近记录改白底描边 chip |
+
+### 8.2 行为保持
+
+日期前后切换与回到今天、热量目标/剩余/打卡状态、四餐分组与条目顺序、添加/编辑/删除/撤销、份量克数换算与热量预览、导航与 ViewModel 调用——全部沿用原实现，仅重排呈现。
+
+### 8.3 验证
+
+| 项 | 结果 |
+| --- | --- |
+| `:app:assembleDebug` | 通过 |
+| `:app:testDebugUnitTest` | 8 suite / 30 用例 / 0 失败 |
+| 浅色首屏 | `docs/screenshots/p3-today-light.png` |
+| 深色 | `docs/screenshots/p3-today-dark.png` |
+| 1.3× 字号 | `docs/screenshots/p3-today-font130.png` |
+| 行为走查 | 日期切到 10/21（739 kcal、出现「回到今天」）、回今日、面板「记到 午餐」、最近记录一步添加（144 kcal + 撤销 Snackbar）、编辑弹窗、删除撤销均正常 |
+| FAB | 空餐收进头行后四餐在首屏完整可见；条目多时 FAB 覆盖底部滚动内容，滚到底时最后一行完整露出（内容底部留白 120dp） |
+
+### 8.4 遗留
+
+- 条目多时首屏 FAB 仍会压住最后一行右侧，靠滚动让位；若要彻底不遮挡，需要把主操作改成常驻底部栏（跨页面决策）。
+- 1.3× 下四餐单卡变长，需滚动才能看全；状态行已用 `FlowRow`，不再折行。
+- 面板仍是「标题/餐次/搜索/分类/最近/列表/输入」七层，留给下一轮。
+

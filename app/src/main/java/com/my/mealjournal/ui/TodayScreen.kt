@@ -1,17 +1,18 @@
 package com.my.mealjournal.ui
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -35,12 +35,9 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,7 +50,6 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,10 +64,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -83,8 +75,16 @@ import com.my.mealjournal.domain.DayStatus
 import com.my.mealjournal.domain.MealTiming
 import com.my.mealjournal.domain.MealType
 import com.my.mealjournal.domain.Portion
+import com.my.mealjournal.ui.design.AppButton
+import com.my.mealjournal.ui.design.AppButtonStyle
+import com.my.mealjournal.ui.design.AppChip
+import com.my.mealjournal.ui.design.ListRow
+import com.my.mealjournal.ui.design.SectionHeader
+import com.my.mealjournal.ui.design.Spacing
+import com.my.mealjournal.ui.design.SurfaceCard
 import java.time.LocalDate
 import java.time.LocalTime
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 @Composable
@@ -108,43 +108,43 @@ fun TodayScreen(vm: TodayViewModel) {
     }
 
     Box(Modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .padding(bottom = 88.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        DateHeader(
-            date = state.date,
-            editable = state.editable,
-            onShift = { days -> vm.selectDate(state.date.plusDays(days)) },
-            onToday = { vm.selectDate(LocalDate.now()) },
-        )
-
-        ProgressCard(state)
-
-        MealType.entries.forEach { meal ->
-            MealSection(
-                meal = meal,
-                entries = state.entriesByMeal[meal].orEmpty(),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Spacing.page)
+                .padding(top = Spacing.md, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            DateHeader(
+                date = state.date,
                 editable = state.editable,
-                onAdd = {
+                onShift = { days -> vm.selectDate(state.date.plusDays(days)) },
+                onToday = { vm.selectDate(LocalDate.now()) },
+            )
+
+            SummaryCard(state)
+
+            SectionHeader(
+                title = "四餐",
+                subtitle = if (state.editable) "点任意一餐添加，点条目修改" else "仅可查看，超出 7 天补记窗口",
+            )
+
+            MealsCard(
+                state = state,
+                onAdd = { meal ->
                     addingMeal = meal
                     addingFromFab = false
                 },
                 onEdit = { editing = it },
             )
         }
-        Spacer(Modifier.height(24.dp))
-    }
 
         SnackbarHost(
             hostState = snackbar,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(start = 16.dp, end = 16.dp, bottom = 96.dp),
+                .padding(start = Spacing.page, end = Spacing.page, bottom = 96.dp),
         )
 
         ExtendedFloatingActionButton(
@@ -152,12 +152,12 @@ fun TodayScreen(vm: TodayViewModel) {
                 addingMeal = MealTiming.defaultMeal(LocalTime.now())
                 addingFromFab = true
             },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("记一笔")
-        }
+            modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.xl),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            text = { Text("记一笔", style = MaterialTheme.typography.labelLarge) },
+        )
     }
 
     addingMeal?.let { meal ->
@@ -197,15 +197,19 @@ private fun DateHeader(
     onShift: (Long) -> Unit,
     onToday: () -> Unit,
 ) {
+    val isToday = date == LocalDate.now()
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = if (date == LocalDate.now()) "今天" else date.labelFull(),
+                text = if (isToday) "今天" else date.labelShort(),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = if (editable) date.labelFull() else "已超出 7 天补记窗口，仅可查看",
+                text = buildString {
+                    append(date.labelFull())
+                    if (!editable) append(" · 仅可查看")
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -216,102 +220,178 @@ private fun DateHeader(
         IconButton(onClick = { onShift(1) }) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "后一天")
         }
-        TextButton(onClick = onToday) { Text("今天") }
+        if (!isToday) {
+            AppButton(
+                text = "回到今天",
+                onClick = onToday,
+                style = AppButtonStyle.Text,
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ProgressCard(state: TodayUiState) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CalorieRing(progress = state.progress, over = state.totalKcal > state.goalKcal)
-            Spacer(Modifier.width(20.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("今日摄入", style = MaterialTheme.typography.labelMedium)
+private fun SummaryCard(state: TodayUiState) {
+    val over = state.remainingKcal < 0
+    SurfaceCard {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = "${state.totalKcal.toInt()}",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
+                    text = "今日摄入",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = "${state.totalKcal.toInt()}",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text(
+                        text = "kcal",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
                 Text(
-                    text = "目标 ${state.goalKcal} kcal · " +
-                        if (state.remainingKcal >= 0) "还剩 ${state.remainingKcal.toInt()}" else "超出 ${(-state.remainingKcal).toInt()}",
+                    text = "目标 ${state.goalKcal} kcal",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(state.status)
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "今日打卡：${state.status.label}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Icon(
-                        Icons.Filled.LocalFireDepartment,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = "连续 ${state.streak} 天",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
             }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = if (over) "已超出" else "还剩",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "${abs(state.remainingKcal).toInt()}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "kcal",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(Spacing.md))
+        ProgressBar(progress = state.progress, over = over)
+        Spacer(Modifier.height(Spacing.md))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            StatusPill(state.status)
+            StreakBadge(state.streak)
         }
     }
 }
 
 @Composable
-private fun StatusDot(status: DayStatus) {
-    val color = when (status) {
-        DayStatus.COMPLETE -> MaterialTheme.colorScheme.primary
-        DayStatus.PARTIAL -> MaterialTheme.colorScheme.tertiary
-        DayStatus.MISSING -> MaterialTheme.colorScheme.outline
-    }
-    Box(Modifier.size(8.dp).background(color, CircleShape))
-}
-
-@Composable
-private fun CalorieRing(progress: Float, over: Boolean) {
-    val track = MaterialTheme.colorScheme.outlineVariant
+private fun ProgressBar(progress: Float, over: Boolean) {
     val active = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Canvas(Modifier.size(104.dp)) {
-        val stroke = 12.dp.toPx()
-        val inset = stroke / 2
-        drawArc(
-            color = track,
-            startAngle = -90f,
-            sweepAngle = 360f,
-            useCenter = false,
-            topLeft = Offset(inset, inset),
-            size = Size(size.width - stroke, size.height - stroke),
-            style = Stroke(stroke, cap = StrokeCap.Round),
-        )
-        drawArc(
-            color = active,
-            startAngle = -90f,
-            sweepAngle = 360f * progress.coerceIn(0f, 1f),
-            useCenter = false,
-            topLeft = Offset(inset, inset),
-            size = Size(size.width - stroke, size.height - stroke),
-            style = Stroke(stroke, cap = StrokeCap.Round),
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(active),
         )
     }
 }
 
 @Composable
-private fun MealSection(
+private fun StatusPill(status: DayStatus) {
+    val (bg, fg, label) = when (status) {
+        DayStatus.COMPLETE -> Triple(
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            "完整打卡",
+        )
+        DayStatus.PARTIAL -> Triple(
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+            "部分打卡",
+        )
+        DayStatus.MISSING -> Triple(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            "未记录",
+        )
+    }
+    Surface(shape = CircleShape, color = bg, contentColor = fg) {
+        Row(
+            modifier = Modifier.padding(horizontal = Spacing.sm + Spacing.xs, vertical = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(6.dp).background(fg, CircleShape))
+            Spacer(Modifier.width(Spacing.xs + 2.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun StreakBadge(streak: Int) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Filled.LocalFireDepartment,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = if (streak > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline,
+        )
+        Spacer(Modifier.width(Spacing.xs))
+        Text(
+            text = "连续 $streak 天",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun MealsCard(
+    state: TodayUiState,
+    onAdd: (MealType) -> Unit,
+    onEdit: (EntryView) -> Unit,
+) {
+    SurfaceCard(padding = 0.dp) {
+        MealType.entries.forEachIndexed { index, meal ->
+            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            MealBlock(
+                meal = meal,
+                entries = state.entriesByMeal[meal].orEmpty(),
+                editable = state.editable,
+                onAdd = { onAdd(meal) },
+                onEdit = onEdit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MealBlock(
     meal: MealType,
     entries: List<EntryView>,
     editable: Boolean,
@@ -319,68 +399,68 @@ private fun MealSection(
     onEdit: (EntryView) -> Unit,
 ) {
     val subtotal = entries.sumOf { it.kcal }
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
-            .clickable(enabled = editable) { onAdd() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(meal.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = if (subtotal > 0) "${subtotal.toInt()} kcal" else "未记录",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = editable, onClick = onAdd)
+                .padding(start = Spacing.lg, end = Spacing.xs, top = Spacing.md, bottom = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(meal.label, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(Spacing.sm))
+            Text(
+                text = when {
+                    subtotal > 0 -> "${subtotal.toInt()} kcal"
+                    editable -> "未记录 · 点这里记一笔"
+                    else -> "还没有条目"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onAdd, enabled = editable) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = "添加${meal.label}",
+                    modifier = Modifier.size(20.dp),
                 )
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onAdd, enabled = editable) {
-                    Icon(Icons.Filled.Add, contentDescription = "添加${meal.label}")
-                }
             }
-            if (entries.isEmpty()) {
-                Text(
-                    text = if (editable) "点这里记一笔" else "还没有条目",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 6.dp),
-                )
-            } else {
-                entries.forEach { entry ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = editable) { onEdit(entry) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(entry.foodName, style = MaterialTheme.typography.bodyLarge)
+        }
+
+        if (entries.isNotEmpty()) {
+            entries.forEach { entry ->
+                ListRow(
+                    title = entry.foodName,
+                    subtitle = Portion.describe(entry.grams, entry.unitLabel, entry.unitGrams),
+                    onClick = if (editable) ({ onEdit(entry) }) else null,
+                    modifier = Modifier.padding(horizontal = Spacing.lg),
+                    trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = Portion.describe(entry.grams, entry.unitLabel, entry.unitGrams),
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "${entry.kcal.toInt()} kcal",
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            if (editable) {
+                                Spacer(Modifier.width(Spacing.xs))
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.outline,
+                                )
+                            }
                         }
-                        Text("${entry.kcal.toInt()} kcal", style = MaterialTheme.typography.bodyMedium)
-                        if (editable) {
-                            Icon(
-                                Icons.Filled.Edit,
-                                contentDescription = null,
-                                modifier = Modifier.padding(start = 8.dp).size(14.dp),
-                                tint = MaterialTheme.colorScheme.outline,
-                            )
-                        }
-                    }
-                }
+                    },
+                )
             }
+            Spacer(Modifier.height(Spacing.sm))
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun AddEntrySheet(
     initialMeal: MealType,
@@ -419,29 +499,20 @@ private fun AddEntrySheet(
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(horizontal = 16.dp)) {
+        Column(Modifier.padding(horizontal = Spacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("添加食物", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = { customDialog = true }) { Text("自定义") }
+                AppButton(text = "自定义", onClick = { customDialog = true }, style = AppButtonStyle.Text)
             }
             if (showMealPicker) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     MealType.entries.forEach { option ->
-                        Surface(
-                            shape = CircleShape,
-                            color = if (option == meal) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.clickable { meal = option },
-                        ) {
-                            Text(
-                                text = option.label,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (option == meal) MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        AppChip(
+                            text = option.label,
+                            selected = option == meal,
+                            onClick = { meal = option },
+                        )
                     }
                 }
             } else {
@@ -451,7 +522,7 @@ private fun AddEntrySheet(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             OutlinedTextField(
                 value = query,
                 onValueChange = { picker.search(it) },
@@ -463,19 +534,19 @@ private fun AddEntrySheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(vertical = Spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
-                FilterChip(
+                AppChip(
+                    text = "全部",
                     selected = category == null,
                     onClick = { picker.selectCategory(null) },
-                    label = { Text("全部") },
                 )
                 categories.forEach { item ->
-                    FilterChip(
+                    AppChip(
+                        text = item,
                         selected = category == item,
                         onClick = { picker.selectCategory(item) },
-                        label = { Text(item) },
                     )
                 }
             }
@@ -489,13 +560,14 @@ private fun AddEntrySheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(vertical = Spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     recent.forEach { item ->
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(Spacing.border, MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier.combinedClickable(
                                 onClick = { onAdd(item.food, item.grams, meal) },
                                 onLongClick = { choose(item.food) },
@@ -503,7 +575,7 @@ private fun AddEntrySheet(
                         ) {
                             Text(
                                 text = item.food.name,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -573,7 +645,7 @@ private fun AddEntrySheet(
                             icon = {},
                         ) { Text(unitLabel!!) }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -586,13 +658,12 @@ private fun AddEntrySheet(
                         longStep = if (inPortion) 5.0 else 50.0,
                         modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(12.dp))
-                    FilledTonalButton(
-                        onClick = {
-                            val g = gramsNow ?: return@FilledTonalButton
-                            if (g > 0) onAdd(food, g, meal)
-                        },
-                    ) { Text("添加") }
+                    Spacer(Modifier.width(Spacing.md))
+                    AppButton(
+                        text = "添加",
+                        enabled = (gramsNow ?: 0.0) > 0.0,
+                        onClick = { onAdd(food, gramsNow ?: 0.0, meal) },
+                    )
                 }
                 Text(
                     text = "约 ${(food.kcalPer100g * (gramsNow ?: 0.0) / 100).toInt()} kcal" +
@@ -601,7 +672,7 @@ private fun AddEntrySheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
     }
 
@@ -639,7 +710,7 @@ fun CustomFoodDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, singleLine = true)
                 OutlinedTextField(
@@ -655,7 +726,7 @@ fun CustomFoodDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(
                         value = unitLabel,
                         onValueChange = { unitLabel = it },
@@ -720,7 +791,7 @@ private fun EditEntryDialog(
         onDismissRequest = onDismiss,
         title = { Text(entry.foodName) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text("${entry.meal.label} · 原记录 ${entry.kcal.toInt()} kcal")
                 if (hasUnit) {
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -824,7 +895,7 @@ private fun AmountInput(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun StepButton(
     icon: ImageVector,
