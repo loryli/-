@@ -29,33 +29,55 @@ data class CalendarUiState(
     val month: YearMonth,
     val days: Map<LocalDate, DayStatus>,
     val totalKcal: Map<LocalDate, Double>,
+    val mealKcal: Map<LocalDate, Map<MealType, Double>> = emptyMap(),
+    val goalKcal: Int = SettingsStore.DEFAULT_GOAL,
+    val selected: LocalDate? = null,
 ) {
     fun kcalOn(date: LocalDate): Double = totalKcal[date] ?: 0.0
     fun statusOn(date: LocalDate): DayStatus = days[date] ?: DayStatus.MISSING
+    fun mealsOn(date: LocalDate): Map<MealType, Double> = mealKcal[date] ?: emptyMap()
+
+    /** 月概览：只统计有记录的天。 */
+    val recordedDays: Int get() = days.values.count { it != DayStatus.MISSING }
+    val completeDays: Int get() = days.values.count { it == DayStatus.COMPLETE }
+    val achievedDays: Int get() = totalKcal.values.count { it > 0 && it <= goalKcal }
+    val avgKcal: Double get() = totalKcal.values.filter { it > 0 }.ifEmpty { null }?.average() ?: 0.0
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class CalendarViewModel(private val repo: MealRepository) : ViewModel() {
+class CalendarViewModel(
+    private val repo: MealRepository,
+    settings: SettingsStore,
+) : ViewModel() {
 
     private val month = MutableStateFlow(YearMonth.now())
+    private val selected = MutableStateFlow<LocalDate?>(LocalDate.now())
 
-    val state: StateFlow<CalendarUiState> = month
-        .flatMapLatest { m ->
-            repo.entriesBetween(m.atDay(1), m.atEndOfMonth()).let { flow ->
-                flow.map { entries ->
-                    val byDate = entries.groupBy { it.date }
-                    CalendarUiState(
-                        month = m,
-                        days = byDate.mapValues { (_, list) -> DayEvaluator.statusOf(list.map { DayEntry(it.meal, it.kcal) }) },
-                        totalKcal = byDate.mapValues { (_, list) -> DayEvaluator.totalKcal(list.map { DayEntry(it.meal, it.kcal) }) },
-                    )
-                }
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CalendarUiState(YearMonth.now(), emptyMap(), emptyMap()))
+    val state: StateFlow<CalendarUiState> = combine(
+        month.flatMapLatest { m -> repo.entriesBetween(m.atDay(1), m.atEndOfMonth()).map { m to it } },
+        settings.goalKcal,
+        selected,
+    ) { (m, entries), goal, picked ->
+        val byDate = entries.groupBy { it.date }
+        CalendarUiState(
+            month = m,
+            days = byDate.mapValues { (_, list) -> DayEvaluator.statusOf(list.map { DayEntry(it.meal, it.kcal) }) },
+            totalKcal = byDate.mapValues { (_, list) -> DayEvaluator.totalKcal(list.map { DayEntry(it.meal, it.kcal) }) },
+            mealKcal = byDate.mapValues { (_, list) ->
+                MealType.entries.associateWith { meal -> list.filter { it.meal == meal }.sumOf { it.kcal } }
+            },
+            goalKcal = goal,
+            selected = picked,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CalendarUiState(YearMonth.now(), emptyMap(), emptyMap()))
 
     fun shiftMonth(delta: Long) {
         month.value = month.value.plusMonths(delta)
+        selected.value = null
+    }
+
+    fun select(date: LocalDate) {
+        selected.value = date
     }
 
     fun reset() {

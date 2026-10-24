@@ -3,7 +3,6 @@ package com.my.mealjournal.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,13 +42,19 @@ fun StatsScreen(vm: StatsViewModel) {
         Text("最近 30 天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            MetricTile("当前连续", "${state.currentStreak} 天", Modifier.weight(1f))
             MetricTile("完整打卡", "${state.trackedDaysWithGoal} 天", Modifier.weight(1f))
-            MetricTile("达标天数", "${state.achievedDays} 天", Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            MetricTile("达标天数", "${state.achievedDays} 天", Modifier.weight(1f))
             MetricTile("日均热量", "${state.avgKcal.toInt()} kcal", Modifier.weight(1f))
-            MetricTile("最长连续", "${state.bestStreak} 天", Modifier.weight(1f))
         }
+        Text(
+            text = "三餐各记一条才算完整打卡，加餐只算热量；断一天连续就从头开始。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = Spacing.xs),
+        )
 
         SurfaceCard(Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -98,20 +103,6 @@ fun StatsScreen(vm: StatsViewModel) {
                         )
                     }
                 }
-            }
-        }
-
-        SurfaceCard(Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                SectionHeader(
-                    title = "当前连续 ${state.currentStreak} 天",
-                    subtitle = "三餐都记上才算完整打卡，加餐只算热量。断一天连击就从头开始。",
-                )
-                Spacer(Modifier.height(Spacing.xs))
-                Text(
-                    "有记录 ${state.trackedDays} 天 · 30 天累计 ${state.totalKcal.toInt()} kcal",
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
     }

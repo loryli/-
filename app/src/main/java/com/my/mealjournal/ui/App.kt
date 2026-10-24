@@ -50,7 +50,7 @@ fun MealJournalApp() {
     )
 
     val todayVm: TodayViewModel = appViewModel { TodayViewModel(it.repository, it.settings) }
-    val calendarVm: CalendarViewModel = appViewModel { CalendarViewModel(it.repository) }
+    val calendarVm: CalendarViewModel = appViewModel { CalendarViewModel(it.repository, it.settings) }
     val statsVm: StatsViewModel = appViewModel { StatsViewModel(it.repository, it.settings) }
     val foodsVm: FoodsViewModel = appViewModel { FoodsViewModel(it.repository) }
     val settingsVm: SettingsViewModel = appViewModel {

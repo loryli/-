@@ -350,6 +350,15 @@ private fun StatusPill(status: DayStatus) {
 
 @Composable
 private fun StreakBadge(streak: Int) {
+    // 0 天时不亮数字，换成引导——新用户每次打开都看「连续 0 天」是负反馈
+    if (streak <= 0) {
+        Text(
+            text = "记满三餐开启连续打卡",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
     Row(
         modifier = Modifier
             .clip(CircleShape)
@@ -360,7 +369,7 @@ private fun StreakBadge(streak: Int) {
             Icons.Filled.LocalFireDepartment,
             contentDescription = null,
             modifier = Modifier.size(14.dp),
-            tint = if (streak > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline,
+            tint = MaterialTheme.colorScheme.tertiary,
         )
         Spacer(Modifier.width(Spacing.xs))
         Text(
@@ -405,7 +414,7 @@ private fun MealBlock(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = editable, onClick = onAdd)
-                .padding(start = Spacing.lg, end = Spacing.xs, top = Spacing.md, bottom = Spacing.xs),
+                .padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.md, bottom = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(meal.label, style = MaterialTheme.typography.titleSmall)
@@ -419,14 +428,6 @@ private fun MealBlock(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onAdd, enabled = editable) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = "添加${meal.label}",
-                    modifier = Modifier.size(20.dp),
-                )
-            }
         }
 
         if (entries.isNotEmpty()) {
