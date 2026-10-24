@@ -11,7 +11,9 @@ import com.my.mealjournal.domain.DayEntry
 import com.my.mealjournal.domain.DayEvaluator
 import com.my.mealjournal.domain.DayStatus
 import com.my.mealjournal.domain.EditWindow
+import com.my.mealjournal.domain.MacroGrams
 import com.my.mealjournal.domain.MealType
+import com.my.mealjournal.domain.Nutrition
 import com.my.mealjournal.domain.StreakCalculator
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,6 +35,8 @@ data class TodayUiState(
     val status: DayStatus,
     val streak: Int,
     val editable: Boolean,
+    val todayMacro: MacroGrams = MacroGrams(0.0, 0.0, 0.0),
+    val macroTargets: MacroGrams = Nutrition.targets(SettingsStore.DEFAULT_GOAL),
 ) {
     val remainingKcal: Double get() = goalKcal - totalKcal
     val progress: Float get() = if (goalKcal <= 0) 0f else (totalKcal / goalKcal).toFloat().coerceIn(0f, 1f)
@@ -78,6 +82,10 @@ class TodayViewModel(
             status = status,
             streak = StreakCalculator.currentStreak(statuses, day),
             editable = EditWindow.isEditable(day, LocalDate.now()),
+            todayMacro = todayEntries.fold(MacroGrams(0.0, 0.0, 0.0)) { acc, e ->
+                acc + MacroGrams(e.protein, e.carbs, e.fat)
+            },
+            macroTargets = Nutrition.targets(goal),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState.empty(LocalDate.now()))
 
@@ -172,9 +180,18 @@ class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
 
     fun clearQuery() = clearFilters()
 
-    fun addCustom(name: String, kcalPer100g: Double, category: String, unitLabel: String?, unitGrams: Double?) {
+    fun addCustom(
+        name: String,
+        kcalPer100g: Double,
+        category: String,
+        unitLabel: String?,
+        unitGrams: Double?,
+        proteinPer100g: Double? = null,
+        carbsPer100g: Double? = null,
+        fatPer100g: Double? = null,
+    ) {
         viewModelScope.launch {
-            repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams)
+            repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams, proteinPer100g, carbsPer100g, fatPer100g)
             refreshRecent()
         }
     }

@@ -197,3 +197,45 @@
 4. 今日页 FAB 压最后一行（P1 遗留，见 §8.4）。
 5. 「最近记录」条件 item 在 LazyColumn 内不渲染的原因未查明（见 §9.2），当前用兄弟节点规避。
 
+## 10. Phase 4：薄荷风改版 + 三大营养素（2026-10-24）
+
+用户拍板：补营养素数据（做薄荷同款三色条）、全部页面改薄荷风、保留深色模式。业务决策（Q15–Q19）与数据模型见 `docs/design.md`。
+
+### 10.1 Token 变更（`ui/theme/Color.kt` 全套替换）
+
+| 角色 | 浅色 | 深色 | 说明 |
+| --- | --- | --- | --- |
+| primary | `#31B672` | `#6FD598` | 清新薄荷绿，替换低饱和自然绿 |
+| primaryContainer | `#DDF5E7` | `#1D4433` | 选中态/记满格 |
+| background | `#F5F7F6` | `#0E1512` | 冷白底替换暖纸感；windowBackground 同步 |
+| surface / outlineVariant | `#FFFFFF` / `#E3E9E5` | `#18201B` / `#2A362E` | 卡片与描边改冷灰调 |
+| tertiary | `#E8A23D` | `#EDB566` | 部分完成/提醒改清爽橙 |
+| NutrientColors | 碳水 `#4D8DE8` / 蛋白 `#9B7BD8` / 脂肪 `#F2A04E` | 亮化版 | 三大营养素固定三色，独立于 ColorScheme（M3 无对应槽位） |
+
+字阶、圆角、间距、`ui/design/` 组件全部沿用。
+
+### 10.2 结构变更
+
+- **今日页**：`SummaryCard` 重构为左侧 `CalorieRing`（新组件 `ui/design/CalorieRing.kt`：轨道 outlineVariant、进度弧 primary、超目标整环 error；环心「还可摄入 N / 已摄入 X/Y」）+ 右侧三行 `NutrientBar`（名称 + `X/Y g` + 三色圆头条）；状态胶囊与连续徽章保留。四餐从单卡分组改四张独立 `SurfaceCard`（薄荷式）。
+- **统计页**：新增「营养素构成」卡，三行三色条显示近 30 天供能占比。
+- **自定义食物弹窗**：新增可选填「蛋白质/碳水/脂肪 g/100g」三个字段，留空 = 未知。
+- **数据**：数据库 2→3 + 营养快照口径（详见 `docs/design.md`）；今日/统计状态新增 `todayMacro / macroTargets / macroShare`。
+
+### 10.3 验证（2026-10-24，模拟器 Pixel 6 / API 35）
+
+| 项 | 结果 |
+| --- | --- |
+| `:app:assembleDebug` | BUILD SUCCESSFUL |
+| `:app:testDebugUnitTest` | 9 suite / 37 用例 / 0 失败（NutritionTest 7 个新用例） |
+| **v2→v3 升级迁移** | 旧版（`eed7c7c`）记「三文鱼 100g」→ 装新版：条目原样保留，营养回填 蛋白 17.2 / 碳水 0 / 脂肪 7.8；161 条内置食物营养 0 缺失；schema 9+3 列齐全 |
+| 清数据走查 | 河粉 1 碗（碳水 59/225 g）+ 鸡蛋 1 个（蛋白 9/90、脂肪 5/60）三色条与热量环联动正确 |
+| 浅色 | `p4-today-light.png`、`p4-calendar-light.png`、`p4-stats-light.png`、`p4-foods-light.png`、`p4-settings-light.png`、`p4-panel-light.png` |
+| 深色 | `p4-today-dark.png`、`p4-stats-dark.png`、`p4-panel-dark.png` |
+| 1.3× 字号 | `p4-today-font130.png`、`p4-settings-font130.png` |
+
+### 10.4 遗留
+
+1. 酒精类（啤酒/白酒等）热量含酒精供能但不计入三大营养素，条目热量与营养供能合计可能对不上（种子注释已说明）。
+2. 营养目标是固定供能比推导，不是个性化值；后续可考虑按体重/目标做可选输入。
+3. Phase 3 的遗留（§9.5）在本轮未处理：面板偏高、导出结果内联文字、提醒时间与开关联动、FAB 压行。
+

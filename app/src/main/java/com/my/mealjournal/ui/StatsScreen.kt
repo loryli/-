@@ -26,6 +26,7 @@ import com.my.mealjournal.ui.design.MetricTile
 import com.my.mealjournal.ui.design.SectionHeader
 import com.my.mealjournal.ui.design.Spacing
 import com.my.mealjournal.ui.design.SurfaceCard
+import com.my.mealjournal.ui.theme.nutrientColors
 
 @Composable
 fun StatsScreen(vm: StatsViewModel) {
@@ -61,6 +62,33 @@ fun StatsScreen(vm: StatsViewModel) {
                             progress = { share },
                             modifier = Modifier.weight(1f).height(8.dp),
                             color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                        Text(
+                            text = "${(share * 100).toInt()}%",
+                            modifier = Modifier.width(48.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+        }
+
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                SectionHeader("营养素构成", subtitle = "三大营养素供能占比 · 参考值")
+                val nutrients = nutrientColors()
+                listOf(
+                    Triple("碳水", state.macroShare.carbs, nutrients.carbs),
+                    Triple("蛋白质", state.macroShare.protein, nutrients.protein),
+                    Triple("脂肪", state.macroShare.fat, nutrients.fat),
+                ).forEach { (label, share, color) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, Modifier.width(52.dp), style = MaterialTheme.typography.bodyMedium)
+                        LinearProgressIndicator(
+                            progress = { share.toFloat() },
+                            modifier = Modifier.weight(1f).height(8.dp),
+                            color = color,
                             trackColor = MaterialTheme.colorScheme.outlineVariant,
                         )
                         Text(

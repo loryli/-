@@ -2,6 +2,6 @@
 <resources>
     <!-- 首帧底色与 Compose 主题 Paper 保持一致，避免启动白/灰闪屏 -->
     <style name="Theme.MealJournal" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">#FFF7F6F1</item>
+        <item name="android:windowBackground">#FFF5F7F6</item>
     </style>
 </resources>

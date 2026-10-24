@@ -15,6 +15,9 @@ data class EntryView(
     val grams: Double,
     val kcal: Double,
     val kcalPer100g: Double = 0.0,
+    val protein: Double = 0.0,
+    val carbs: Double = 0.0,
+    val fat: Double = 0.0,
     val unitLabel: String? = null,
     val unitGrams: Double? = null,
 )
@@ -27,6 +30,9 @@ fun EntryEntity.toView(): EntryView = EntryView(
     grams = grams,
     kcal = kcal,
     kcalPer100g = kcalPer100g,
+    protein = protein,
+    carbs = carbs,
+    fat = fat,
 )
 
 fun EntryUnitRow.toView(): EntryView = EntryView(
@@ -37,6 +43,9 @@ fun EntryUnitRow.toView(): EntryView = EntryView(
     grams = grams,
     kcal = kcal,
     kcalPer100g = kcalPer100g,
+    protein = protein,
+    carbs = carbs,
+    fat = fat,
     unitLabel = unitLabel,
     unitGrams = unitGrams,
 )
@@ -68,6 +77,10 @@ class MealRepository(private val db: MealDatabase) {
 
     suspend fun addEntry(date: LocalDate, meal: MealType, food: FoodEntity, grams: Double): Long {
         val kcal = com.my.mealjournal.domain.CalorieMath.kcal(food.kcalPer100g, grams)
+        val macro = com.my.mealjournal.domain.Nutrition.ofGrams(
+            com.my.mealjournal.domain.MacroPer100g(food.proteinPer100g, food.carbsPer100g, food.fatPer100g),
+            grams,
+        )
         return entryDao.insert(
             EntryEntity(
                 date = date.toString(),
@@ -77,6 +90,9 @@ class MealRepository(private val db: MealDatabase) {
                 kcalPer100g = food.kcalPer100g,
                 grams = grams,
                 kcal = kcal,
+                protein = macro.protein,
+                carbs = macro.carbs,
+                fat = macro.fat,
                 createdAt = System.currentTimeMillis(),
             ),
         )
@@ -85,7 +101,17 @@ class MealRepository(private val db: MealDatabase) {
     suspend fun updateEntryGrams(entryId: Long, grams: Double): Boolean {
         val existing = entryDao.byId(entryId) ?: return false
         val kcal = com.my.mealjournal.domain.CalorieMath.kcal(existing.kcalPer100g, grams)
-        entryDao.update(existing.copy(grams = grams, kcal = kcal))
+        // 营养快照按新克数等比缩放（食物营养已删改也不追溯，与热量口径一致）
+        val ratio = if (existing.grams > 0) grams / existing.grams else 0.0
+        entryDao.update(
+            existing.copy(
+                grams = grams,
+                kcal = kcal,
+                protein = existing.protein * ratio,
+                carbs = existing.carbs * ratio,
+                fat = existing.fat * ratio,
+            ),
+        )
         return true
     }
 
@@ -112,6 +138,9 @@ class MealRepository(private val db: MealDatabase) {
         category: String,
         unitLabel: String? = null,
         unitGrams: Double? = null,
+        proteinPer100g: Double? = null,
+        carbsPer100g: Double? = null,
+        fatPer100g: Double? = null,
     ): Long =
         foodDao.insert(
             FoodEntity(
@@ -120,6 +149,9 @@ class MealRepository(private val db: MealDatabase) {
                 category = category,
                 unitLabel = unitLabel,
                 unitGrams = unitGrams,
+                proteinPer100g = proteinPer100g,
+                carbsPer100g = carbsPer100g,
+                fatPer100g = fatPer100g,
                 isBuiltin = false,
                 createdAt = System.currentTimeMillis(),
             ),

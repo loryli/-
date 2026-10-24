@@ -132,8 +132,8 @@ fun FoodsScreen(vm: FoodsViewModel) {
     if (showAdd) {
         CustomFoodDialog(
             onDismiss = { showAdd = false },
-            onConfirm = { name, kcal, category, unitLabel, unitGrams ->
-                vm.add(name, kcal, category, unitLabel, unitGrams)
+            onConfirm = { name, kcal, category, unitLabel, unitGrams, protein, carbs, fat ->
+                vm.add(name, kcal, category, unitLabel, unitGrams, protein, carbs, fat)
                 showAdd = false
             },
         )

@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,12 +80,14 @@ import com.my.mealjournal.ui.design.AppButton
 import com.my.mealjournal.ui.design.AppButtonStyle
 import com.my.mealjournal.ui.design.AppChip
 import com.my.mealjournal.ui.design.AppTextField
+import com.my.mealjournal.ui.design.CalorieRing
 import com.my.mealjournal.ui.design.EmptyState
 import com.my.mealjournal.ui.design.ListRow
 import com.my.mealjournal.ui.design.SectionHeader
 import com.my.mealjournal.ui.design.Spacing
 import com.my.mealjournal.ui.design.SurfaceCard
 import com.my.mealjournal.ui.design.statusStyle
+import com.my.mealjournal.ui.theme.nutrientColors
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.abs
@@ -133,14 +136,18 @@ fun TodayScreen(vm: TodayViewModel) {
                 subtitle = if (state.editable) "点任意一餐添加，点条目修改" else "仅可查看，超出 7 天补记窗口",
             )
 
-            MealsCard(
-                state = state,
-                onAdd = { meal ->
-                    addingMeal = meal
-                    addingFromFab = false
-                },
-                onEdit = { editing = it },
-            )
+            state.entriesByMeal.forEach { (meal, entries) ->
+                MealCard(
+                    meal = meal,
+                    entries = entries,
+                    editable = state.editable,
+                    onAdd = {
+                        addingMeal = meal
+                        addingFromFab = false
+                    },
+                    onEdit = { editing = it },
+                )
+            }
         }
 
         SnackbarHost(
@@ -237,58 +244,53 @@ private fun DateHeader(
 @Composable
 private fun SummaryCard(state: TodayUiState) {
     val over = state.remainingKcal < 0
+    val nutrients = nutrientColors()
     SurfaceCard {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "今日摄入",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(verticalAlignment = Alignment.Bottom) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CalorieRing(
+                progress = state.progress,
+                over = over,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Text(
-                        text = "${state.totalKcal.toInt()}",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
+                        text = if (over) "已超出" else "还可摄入",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.width(Spacing.xs))
+                    Text(
+                        text = "${abs(state.remainingKcal).toInt()}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    )
                     Text(
                         text = "kcal",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text(
+                        text = "已摄入 ${state.totalKcal.toInt()} / ${state.goalKcal}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(
-                    text = "目标 ${state.goalKcal} kcal",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = if (over) "已超出" else "还剩",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "${abs(state.remainingKcal).toInt()}",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "kcal",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Spacer(Modifier.width(Spacing.lg))
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                NutrientBar("碳水", state.todayMacro.carbs, state.macroTargets.carbs, nutrients.carbs)
+                NutrientBar("蛋白质", state.todayMacro.protein, state.macroTargets.protein, nutrients.protein)
+                NutrientBar("脂肪", state.todayMacro.fat, state.macroTargets.fat, nutrients.fat)
             }
         }
 
         Spacer(Modifier.height(Spacing.md))
-        ProgressBar(progress = state.progress, over = over)
-        Spacer(Modifier.height(Spacing.md))
-
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -299,23 +301,35 @@ private fun SummaryCard(state: TodayUiState) {
     }
 }
 
+/** 三色营养素条：名称 + 摄入/目标克数 + 彩色进度。 */
 @Composable
-private fun ProgressBar(progress: Float, over: Boolean) {
-    val active = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.outlineVariant),
-    ) {
+private fun NutrientBar(label: String, value: Double, target: Double, color: Color) {
+    val progress = if (target <= 0.0) 0f else (value / target).toFloat().coerceIn(0f, 1f)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Row {
+            Text(label, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "${value.toInt()}/${target.toInt()} g",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Box(
             Modifier
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                .fillMaxHeight()
+                .fillMaxWidth()
+                .height(6.dp)
                 .clip(CircleShape)
-                .background(active),
-        )
+                .background(MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(progress)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(color),
+            )
+        }
     }
 }
 
@@ -357,23 +371,23 @@ private fun StreakBadge(streak: Int) {
     }
 }
 
+/** 一餐一张卡：头行可整行点击添加，条目行点击进编辑。 */
 @Composable
-private fun MealsCard(
-    state: TodayUiState,
-    onAdd: (MealType) -> Unit,
+private fun MealCard(
+    meal: MealType,
+    entries: List<EntryView>,
+    editable: Boolean,
+    onAdd: () -> Unit,
     onEdit: (EntryView) -> Unit,
 ) {
     SurfaceCard(padding = 0.dp) {
-        MealType.entries.forEachIndexed { index, meal ->
-            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            MealBlock(
-                meal = meal,
-                entries = state.entriesByMeal[meal].orEmpty(),
-                editable = state.editable,
-                onAdd = { onAdd(meal) },
-                onEdit = onEdit,
-            )
-        }
+        MealBlock(
+            meal = meal,
+            entries = entries,
+            editable = editable,
+            onAdd = onAdd,
+            onEdit = onEdit,
+        )
     }
 }
 
@@ -648,8 +662,8 @@ private fun AddEntrySheet(
     if (customDialog) {
         CustomFoodDialog(
             onDismiss = { customDialog = false },
-            onConfirm = { name, kcal, category, unitLabel, unitGrams ->
-                picker.addCustom(name, kcal, category, unitLabel, unitGrams)
+            onConfirm = { name, kcal, category, unitLabel, unitGrams, protein, carbs, fat ->
+                picker.addCustom(name, kcal, category, unitLabel, unitGrams, protein, carbs, fat)
                 customDialog = false
             },
         )
@@ -659,19 +673,30 @@ private fun AddEntrySheet(
 @Composable
 fun CustomFoodDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, Double, String, String?, Double?) -> Unit,
+    onConfirm: (
+        name: String, kcal: Double, category: String,
+        unitLabel: String?, unitGrams: Double?,
+        protein: Double?, carbs: Double?, fat: Double?,
+    ) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var kcal by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("自定义") }
     var unitLabel by remember { mutableStateOf("") }
     var unitGrams by remember { mutableStateOf("") }
+    var protein by remember { mutableStateOf("") }
+    var carbs by remember { mutableStateOf("") }
+    var fat by remember { mutableStateOf("") }
 
     val kcalValue = kcal.toDoubleOrNull()
     val gramsValue = unitGrams.toDoubleOrNull()
     val unitPairOk = (unitLabel.isBlank() && unitGrams.isBlank()) ||
         (unitLabel.isNotBlank() && gramsValue != null && gramsValue > 0)
-    val canSave = name.isNotBlank() && kcalValue != null && kcalValue > 0 && unitPairOk
+    val macroOk = listOf(protein, carbs, fat).all { it.isBlank() || (it.toDoubleOrNull()?.let { v -> v >= 0 } == true) }
+    val proteinValue = protein.toDoubleOrNull()
+    val carbsValue = carbs.toDoubleOrNull()
+    val fatValue = fat.toDoubleOrNull()
+    val canSave = name.isNotBlank() && kcalValue != null && kcalValue > 0 && unitPairOk && macroOk
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -709,6 +734,34 @@ fun CustomFoodDialog(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Text(
+                    text = "营养素 g/100g（可留空）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    AppTextField(
+                        value = protein,
+                        onValueChange = { protein = it },
+                        label = "蛋白质",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppTextField(
+                        value = carbs,
+                        onValueChange = { carbs = it },
+                        label = "碳水",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppTextField(
+                        value = fat,
+                        onValueChange = { fat = it },
+                        label = "脂肪",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 if (!unitPairOk) {
                     Text(
                         text = "单位和每份克数要么都填，要么都留空",
@@ -731,6 +784,9 @@ fun CustomFoodDialog(
                         category.trim().ifBlank { "自定义" },
                         unitLabel.trim().ifBlank { null },
                         gramsValue,
+                        proteinValue,
+                        carbsValue,
+                        fatValue,
                     )
                 },
             )

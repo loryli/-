@@ -8,7 +8,9 @@ import com.my.mealjournal.data.SettingsStore
 import com.my.mealjournal.domain.DayEntry
 import com.my.mealjournal.domain.DayEvaluator
 import com.my.mealjournal.domain.DayStatus
+import com.my.mealjournal.domain.MacroGrams
 import com.my.mealjournal.domain.MealType
+import com.my.mealjournal.domain.Nutrition
 import com.my.mealjournal.domain.StreakCalculator
 import com.my.mealjournal.notify.ReminderScheduler
 import java.time.LocalDate
@@ -70,6 +72,7 @@ data class StatsUiState(
     val currentStreak: Int,
     val mealKcal: Map<MealType, Double>,
     val totalKcal: Double,
+    val macroShare: MacroGrams = MacroGrams(0.0, 0.0, 0.0),
 ) {
     val mealShare: Map<MealType, Float>
         get() = if (totalKcal <= 0) MealType.entries.associateWith { 0f }
@@ -90,6 +93,9 @@ class StatsViewModel(repo: MealRepository, settings: SettingsStore) : ViewModel(
             entries.filter { it.meal == meal }.sumOf { it.kcal }
         }
         val totals = byDate.mapValues { (_, list) -> DayEvaluator.totalKcal(list.map { DayEntry(it.meal, it.kcal) }) }
+        val macro = entries.fold(MacroGrams(0.0, 0.0, 0.0)) { acc, e ->
+            acc + MacroGrams(e.protein, e.carbs, e.fat)
+        }
         StatsUiState(
             trackedDays = statuses.count { it.value != DayStatus.MISSING },
             trackedDaysWithGoal = statuses.count { it.value == DayStatus.COMPLETE },
@@ -99,6 +105,7 @@ class StatsViewModel(repo: MealRepository, settings: SettingsStore) : ViewModel(
             currentStreak = StreakCalculator.currentStreak(statuses, today),
             mealKcal = mealKcal,
             totalKcal = totals.values.sum(),
+            macroShare = Nutrition.shares(macro),
         )
     }.stateIn(
         viewModelScope,
@@ -130,8 +137,19 @@ class FoodsViewModel(private val repo: MealRepository) : ViewModel() {
     val foods: StateFlow<List<FoodEntity>> = repo.customFoods()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun add(name: String, kcalPer100g: Double, category: String, unitLabel: String?, unitGrams: Double?) {
-        viewModelScope.launch { repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams) }
+    fun add(
+        name: String,
+        kcalPer100g: Double,
+        category: String,
+        unitLabel: String?,
+        unitGrams: Double?,
+        proteinPer100g: Double? = null,
+        carbsPer100g: Double? = null,
+        fatPer100g: Double? = null,
+    ) {
+        viewModelScope.launch {
+            repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams, proteinPer100g, carbsPer100g, fatPer100g)
+        }
     }
 
     private var lastDeleted: FoodEntity? = null
