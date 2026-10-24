@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,14 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,10 +31,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.my.mealjournal.data.SettingsStore
+import com.my.mealjournal.ui.design.AppButton
+import com.my.mealjournal.ui.design.AppButtonStyle
+import com.my.mealjournal.ui.design.AppChip
+import com.my.mealjournal.ui.design.AppTextField
+import com.my.mealjournal.ui.design.ListRow
+import com.my.mealjournal.ui.design.SectionHeader
+import com.my.mealjournal.ui.design.Spacing
+import com.my.mealjournal.ui.design.SurfaceCard
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -75,81 +78,81 @@ fun SettingsScreen(vm: SettingsViewModel) {
         }
     }
 
+    val reminderToggle: (Boolean) -> Unit = { enabled ->
+        if (enabled && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            vm.setReminderEnabled(enabled)
+        }
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = Spacing.page)
+            .padding(top = Spacing.md, bottom = Spacing.xxl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-        AppCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("每日目标热量", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                SectionHeader("每日目标热量", subtitle = "点档位直接生效，或填自定义值保存")
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     SettingsStore.GOAL_PRESETS.forEach { preset ->
-                        Surface(
-                            shape = CircleShape,
-                            color = if (preset == state.goalKcal) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.clickable { vm.setGoal(preset) },
-                        ) {
-                            Text(
-                                text = "$preset",
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (preset == state.goalKcal) MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = goalText,
-                        onValueChange = { goalText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("自定义 kcal") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = {
-                        goalText.toIntOrNull()?.let { if (it in 600..6000) vm.setGoal(it) }
-                    }) { Text("保存") }
-                }
-            }
-        }
-
-        AppCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("每日打卡提醒", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            text = "每天 ${state.reminderMinute.minuteText()} 提醒记三餐",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        AppChip(
+                            text = "$preset",
+                            selected = preset == state.goalKcal,
+                            onClick = { vm.setGoal(preset) },
                         )
                     }
-                    Switch(
-                        checked = state.reminderEnabled,
-                        onCheckedChange = { enabled ->
-                            if (enabled && Build.VERSION.SDK_INT >= 33 &&
-                                ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS,
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else {
-                                vm.setReminderEnabled(enabled)
-                            }
-                        },
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppTextField(
+                        value = goalText,
+                        onValueChange = { goalText = it.filter { ch -> ch.isDigit() } },
+                        label = "自定义 kcal",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(Spacing.sm))
+                    AppButton(
+                        text = "保存",
+                        style = AppButtonStyle.Secondary,
+                        enabled = goalText.toIntOrNull()?.let { it in 600..6000 } == true,
+                        onClick = { goalText.toIntOrNull()?.let { if (it in 600..6000) vm.setGoal(it) } },
                     )
                 }
                 Text(
-                    text = "修改提醒时间",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable {
+                    text = "自定义范围 600–6000 kcal",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                SectionHeader("每日打卡提醒", subtitle = "到点还没记满三餐就提醒")
+                ListRow(
+                    title = "开启提醒",
+                    onClick = { reminderToggle(!state.reminderEnabled) },
+                    trailing = {
+                        Switch(
+                            checked = state.reminderEnabled,
+                            onCheckedChange = reminderToggle,
+                        )
+                    },
+                )
+                ListRow(
+                    title = "提醒时间",
+                    onClick = {
                         val hour = state.reminderMinute / 60
                         val minute = state.reminderMinute % 60
                         TimePickerDialog(
@@ -160,23 +163,26 @@ fun SettingsScreen(vm: SettingsViewModel) {
                             true,
                         ).show()
                     },
+                    trailing = {
+                        Text(
+                            text = state.reminderMinute.minuteText(),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    },
                 )
             }
         }
 
-        AppCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("导出数据", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "导出全部记录为 CSV，Excel / 数字手账都能直接打开。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                SectionHeader("导出数据", subtitle = "导出全部记录为 CSV，Excel / 数字手账都能直接打开。")
+                AppButton(
+                    text = "导出 CSV",
+                    onClick = { exportLauncher.launch("三餐记-${LocalDate.now()}.csv") },
                 )
-                Button(onClick = { exportLauncher.launch("三餐记-${LocalDate.now()}.csv") }) {
-                    Text("导出 CSV")
-                }
                 exportMessage?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall)
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -186,6 +192,5 @@ fun SettingsScreen(vm: SettingsViewModel) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(24.dp))
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,10 +31,10 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -42,7 +43,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -52,10 +52,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,10 +78,13 @@ import com.my.mealjournal.domain.Portion
 import com.my.mealjournal.ui.design.AppButton
 import com.my.mealjournal.ui.design.AppButtonStyle
 import com.my.mealjournal.ui.design.AppChip
+import com.my.mealjournal.ui.design.AppTextField
+import com.my.mealjournal.ui.design.EmptyState
 import com.my.mealjournal.ui.design.ListRow
 import com.my.mealjournal.ui.design.SectionHeader
 import com.my.mealjournal.ui.design.Spacing
 import com.my.mealjournal.ui.design.SurfaceCard
+import com.my.mealjournal.ui.design.statusStyle
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.abs
@@ -318,31 +321,15 @@ private fun ProgressBar(progress: Float, over: Boolean) {
 
 @Composable
 private fun StatusPill(status: DayStatus) {
-    val (bg, fg, label) = when (status) {
-        DayStatus.COMPLETE -> Triple(
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            "完整打卡",
-        )
-        DayStatus.PARTIAL -> Triple(
-            MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,
-            "部分打卡",
-        )
-        DayStatus.MISSING -> Triple(
-            MaterialTheme.colorScheme.surfaceVariant,
-            MaterialTheme.colorScheme.onSurfaceVariant,
-            "未记录",
-        )
-    }
-    Surface(shape = CircleShape, color = bg, contentColor = fg) {
+    val style = status.statusStyle()
+    Surface(shape = CircleShape, color = style.container, contentColor = style.content) {
         Row(
             modifier = Modifier.padding(horizontal = Spacing.sm + Spacing.xs, vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(6.dp).background(fg, CircleShape))
+            Box(Modifier.size(6.dp).background(style.content, CircleShape))
             Spacer(Modifier.width(Spacing.xs + 2.dp))
-            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text(style.label, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -497,16 +484,34 @@ private fun AddEntrySheet(
     DisposableEffect(Unit) {
         onDispose { picker.clearQuery() }
     }
+    LaunchedEffect(Unit) { picker.refreshRecent() }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(horizontal = Spacing.lg)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg)
+                .imePadding(),
+        ) {
+            // 第一层：标题 + 餐次（从餐次卡片进入时餐次收进副标题，不再单独占层）
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("添加食物", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text("添加食物", style = MaterialTheme.typography.titleLarge)
+                    if (!showMealPicker) {
+                        Text(
+                            text = "记到 ${meal.label}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
                 AppButton(text = "自定义", onClick = { customDialog = true }, style = AppButtonStyle.Text)
             }
             if (showMealPicker) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Row(
+                    modifier = Modifier.padding(top = Spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
                     MealType.entries.forEach { option ->
                         AppChip(
                             text = option.label,
@@ -515,19 +520,15 @@ private fun AddEntrySheet(
                         )
                     }
                 }
-            } else {
-                Text(
-                    text = "记到 ${meal.label}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
             }
+
+            // 第二层：搜索 + 分类
             Spacer(Modifier.height(Spacing.sm))
-            OutlinedTextField(
+            AppTextField(
                 value = query,
                 onValueChange = { picker.search(it) },
-                label = { Text("搜索食物") },
-                singleLine = true,
+                label = "搜索食物",
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(
@@ -550,9 +551,12 @@ private fun AddEntrySheet(
                     )
                 }
             }
-            if (query.isBlank() && category == null && recent.isNotEmpty()) {
+
+            // 第三层：结果 = 最近记录捷径 + 食物列表
+            val showRecent = query.isBlank() && category == null && recent.isNotEmpty()
+            if (showRecent) {
                 Text(
-                    text = "最近记录",
+                    text = "最近记录 · 点一下按上次份量记",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -583,93 +587,58 @@ private fun AddEntrySheet(
                     }
                 }
             }
-            LazyColumn(Modifier.weight(1f, fill = false).height(300.dp)) {
-                items(foods, key = { it.id }) { food ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { choose(food) }
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(food.name, style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                text = "${food.kcalPer100g.toInt()} kcal/100g · ${food.category}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (selected?.id == food.id) {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+            LazyColumn(Modifier.weight(1f, fill = false)) {
+                if (foods.isEmpty()) {
+                    item(key = "empty") {
+                        EmptyState(
+                            title = if (query.isBlank()) "这个分类下还没有食物" else "没有找到「$query」",
+                            hint = "换个关键词或分类，或点右上角「自定义」新建",
+                        )
                     }
+                }
+                items(foods, key = { it.id }) { food ->
+                    ListRow(
+                        title = food.name,
+                        subtitle = "${food.kcalPer100g.toInt()} kcal/100g · ${food.category}",
+                        onClick = { choose(food) },
+                        trailing = {
+                            if (selected?.id == food.id) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        },
+                    )
                 }
             }
+
+            // 选中食物后的份量录入区，浮在结果区下方
             selected?.let { food ->
-                val unitLabel = food.unitLabel
-                val unitGrams = food.unitGrams
-                val hasUnit = unitLabel != null && unitGrams != null && unitGrams > 0
                 val gramsNow = amount.toDoubleOrNull()?.let { value ->
-                    if (portionMode && hasUnit) Portion.gramsOf(value, unitGrams!!) else value
-                }
-
-                if (hasUnit) {
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = !portionMode,
-                            onClick = {
-                                val value = amount.toDoubleOrNull()
-                                if (portionMode && value != null && value > 0) {
-                                    amount = Portion.label(Portion.gramsOf(value, unitGrams!!))
-                                }
-                                portionMode = false
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            icon = {},
-                        ) { Text("克") }
-                        SegmentedButton(
-                            selected = portionMode,
-                            onClick = {
-                                val value = amount.toDoubleOrNull()
-                                if (!portionMode && value != null && value > 0) {
-                                    amount = Portion.label(Portion.portionOf(value, unitGrams!!))
-                                }
-                                portionMode = true
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            icon = {},
-                        ) { Text(unitLabel!!) }
+                    if (portionMode && food.unitLabel != null && (food.unitGrams ?: 0.0) > 0) {
+                        Portion.gramsOf(value, food.unitGrams!!)
+                    } else {
+                        value
                     }
-                    Spacer(Modifier.height(Spacing.sm))
                 }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val inPortion = portionMode && hasUnit
-                    AmountInput(
-                        amount = amount,
-                        onAmountChange = { amount = it },
-                        label = if (inPortion) "数量" else "克数",
-                        step = if (inPortion) 0.5 else 10.0,
-                        longStep = if (inPortion) 5.0 else 50.0,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(Spacing.md))
-                    AppButton(
-                        text = "添加",
-                        enabled = (gramsNow ?: 0.0) > 0.0,
-                        onClick = { onAdd(food, gramsNow ?: 0.0, meal) },
-                    )
-                }
-                Text(
-                    text = "约 ${(food.kcalPer100g * (gramsNow ?: 0.0) / 100).toInt()} kcal" +
-                        if (portionMode && hasUnit) " · ${Portion.label(gramsNow ?: 0.0)} g" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Spacer(Modifier.height(Spacing.sm))
+                PortionEditor(
+                    kcalPer100g = food.kcalPer100g,
+                    unitLabel = food.unitLabel,
+                    unitGrams = food.unitGrams,
+                    amount = amount,
+                    onAmountChange = { amount = it },
+                    portionMode = portionMode,
+                    onPortionModeChange = { portionMode = it },
+                    trailing = {
+                        AppButton(
+                            text = "添加",
+                            enabled = (gramsNow ?: 0.0) > 0.0,
+                            onClick = { onAdd(food, gramsNow ?: 0.0, meal) },
+                        )
+                    },
                 )
             }
             Spacer(Modifier.height(Spacing.lg))
@@ -712,34 +681,31 @@ fun CustomFoodDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, singleLine = true)
-                OutlinedTextField(
+                AppTextField(value = name, onValueChange = { name = it }, label = "名称")
+                AppTextField(
                     value = kcal,
                     onValueChange = { kcal = it },
-                    label = { Text("每 100g 热量 (kcal)") },
+                    label = "每 100g 热量 (kcal)",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
                 )
-                OutlinedTextField(value = category, onValueChange = { category = it }, label = { Text("分类") }, singleLine = true)
+                AppTextField(value = category, onValueChange = { category = it }, label = "分类")
                 Text(
                     text = "常用份量（可留空，留空就只能填克数）",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    OutlinedTextField(
+                    AppTextField(
                         value = unitLabel,
                         onValueChange = { unitLabel = it },
-                        label = { Text("单位，如 碗") },
-                        singleLine = true,
+                        label = "单位，如 碗",
                         modifier = Modifier.weight(1f),
                     )
-                    OutlinedTextField(
+                    AppTextField(
                         value = unitGrams,
                         onValueChange = { unitGrams = it },
-                        label = { Text("每份克数") },
+                        label = "每份克数",
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -753,10 +719,12 @@ fun CustomFoodDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            AppButton(
+                text = "保存",
+                style = AppButtonStyle.Text,
                 enabled = canSave,
                 onClick = {
-                    if (!canSave) return@TextButton
+                    if (!canSave) return@AppButton
                     onConfirm(
                         name.trim(),
                         kcalValue!!,
@@ -765,9 +733,81 @@ fun CustomFoodDialog(
                         gramsValue,
                     )
                 },
-            ) { Text("保存") }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = {
+            AppButton(text = "取消", onClick = onDismiss, style = AppButtonStyle.Text)
+        },
+    )
+}
+
+/** 克/份切换 + 数量步进输入 + 热量预览；添加面板与编辑弹窗共用。trailing 挂在输入行右侧。 */
+@Composable
+private fun PortionEditor(
+    kcalPer100g: Double,
+    unitLabel: String?,
+    unitGrams: Double?,
+    amount: String,
+    onAmountChange: (String) -> Unit,
+    portionMode: Boolean,
+    onPortionModeChange: (Boolean) -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val hasUnit = unitLabel != null && unitGrams != null && unitGrams > 0
+
+    if (hasUnit) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = !portionMode,
+                onClick = {
+                    val value = amount.toDoubleOrNull()
+                    if (portionMode && value != null && value > 0) {
+                        onAmountChange(Portion.label(Portion.gramsOf(value, unitGrams!!)))
+                    }
+                    onPortionModeChange(false)
+                },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                icon = {},
+            ) { Text("克") }
+            SegmentedButton(
+                selected = portionMode,
+                onClick = {
+                    val value = amount.toDoubleOrNull()
+                    if (!portionMode && value != null && value > 0) {
+                        onAmountChange(Portion.label(Portion.portionOf(value, unitGrams!!)))
+                    }
+                    onPortionModeChange(true)
+                },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                icon = {},
+            ) { Text(unitLabel!!) }
+        }
+        Spacer(Modifier.height(Spacing.sm))
+    }
+
+    val inPortion = portionMode && hasUnit
+    val gramsNow = amount.toDoubleOrNull()?.let { value ->
+        if (inPortion) Portion.gramsOf(value, unitGrams!!) else value
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AmountInput(
+            amount = amount,
+            onAmountChange = onAmountChange,
+            label = if (inPortion) "数量" else "克数",
+            step = if (inPortion) 0.5 else 10.0,
+            longStep = if (inPortion) 5.0 else 50.0,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
+            Spacer(Modifier.width(Spacing.md))
+            trailing()
+        }
+    }
+    Text(
+        text = "约 ${(kcalPer100g * (gramsNow ?: 0.0) / 100).toInt()} kcal" +
+            if (inPortion) " · ${Portion.label(gramsNow ?: 0.0)} g" else "",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -793,62 +833,29 @@ private fun EditEntryDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text("${entry.meal.label} · 原记录 ${entry.kcal.toInt()} kcal")
-                if (hasUnit) {
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = !portionMode,
-                            onClick = {
-                                val value = amount.toDoubleOrNull()
-                                if (portionMode && value != null && value > 0) {
-                                    amount = Portion.label(Portion.gramsOf(value, unitGrams!!))
-                                }
-                                portionMode = false
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            icon = {},
-                        ) { Text("克") }
-                        SegmentedButton(
-                            selected = portionMode,
-                            onClick = {
-                                val value = amount.toDoubleOrNull()
-                                if (!portionMode && value != null && value > 0) {
-                                    amount = Portion.label(Portion.portionOf(value, unitGrams!!))
-                                }
-                                portionMode = true
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            icon = {},
-                        ) { Text(unitLabel!!) }
-                    }
-                }
-                val inPortion = portionMode && hasUnit
-                AmountInput(
+                PortionEditor(
+                    kcalPer100g = entry.kcalPer100g,
+                    unitLabel = unitLabel,
+                    unitGrams = unitGrams,
                     amount = amount,
                     onAmountChange = { amount = it },
-                    label = if (inPortion) "数量" else "克数",
-                    step = if (inPortion) 0.5 else 10.0,
-                    longStep = if (inPortion) 5.0 else 50.0,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = "现在约 ${(entry.kcalPer100g * (gramsNow ?: 0.0) / 100).toInt()} kcal" +
-                        if (portionMode && hasUnit) " · ${Portion.label(gramsNow ?: 0.0)} g" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    portionMode = portionMode,
+                    onPortionModeChange = { portionMode = it },
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { gramsNow?.let { if (it > 0) onSave(it) } }) { Text("保存") }
+            AppButton(
+                text = "保存",
+                style = AppButtonStyle.Text,
+                enabled = (gramsNow ?: 0.0) > 0.0,
+                onClick = { gramsNow?.let { if (it > 0) onSave(it) } },
+            )
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("删除")
-                }
-                TextButton(onClick = onDismiss) { Text("取消") }
+                AppButton(text = "删除", onClick = onDelete, style = AppButtonStyle.Text, destructive = true)
+                AppButton(text = "取消", onClick = onDismiss, style = AppButtonStyle.Text)
             }
         },
     )
@@ -878,12 +885,11 @@ private fun AmountInput(
             onClick = { bump(-step) },
             onLongClick = { bump(-longStep) },
         )
-        OutlinedTextField(
+        AppTextField(
             value = amount,
             onValueChange = onAmountChange,
-            label = { Text(label) },
+            label = label,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            singleLine = true,
             modifier = Modifier.weight(1f),
         )
         StepButton(

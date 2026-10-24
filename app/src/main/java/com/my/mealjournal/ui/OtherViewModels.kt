@@ -134,8 +134,19 @@ class FoodsViewModel(private val repo: MealRepository) : ViewModel() {
         viewModelScope.launch { repo.addCustomFood(name, kcalPer100g, category, unitLabel, unitGrams) }
     }
 
+    private var lastDeleted: FoodEntity? = null
+
     fun delete(food: FoodEntity) {
-        viewModelScope.launch { repo.deleteCustomFood(food) }
+        viewModelScope.launch {
+            repo.deleteCustomFood(food)
+            lastDeleted = food
+        }
+    }
+
+    fun undoDelete() {
+        val food = lastDeleted ?: return
+        lastDeleted = null
+        viewModelScope.launch { repo.restoreFood(food) }
     }
 }
 

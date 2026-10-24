@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,29 +22,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.my.mealjournal.domain.MealType
+import com.my.mealjournal.ui.design.MetricTile
+import com.my.mealjournal.ui.design.SectionHeader
+import com.my.mealjournal.ui.design.Spacing
+import com.my.mealjournal.ui.design.SurfaceCard
 
 @Composable
 fun StatsScreen(vm: StatsViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = Spacing.page)
+            .padding(top = Spacing.md, bottom = Spacing.xxl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Text("最近 30 天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard("完整打卡", "${state.trackedDaysWithGoal} 天", Modifier.weight(1f))
-            StatCard("达标天数", "${state.achievedDays} 天", Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            MetricTile("完整打卡", "${state.trackedDaysWithGoal} 天", Modifier.weight(1f))
+            MetricTile("达标天数", "${state.achievedDays} 天", Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard("日均热量", "${state.avgKcal.toInt()} kcal", Modifier.weight(1f))
-            StatCard("最长连续", "${state.bestStreak} 天", Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            MetricTile("日均热量", "${state.avgKcal.toInt()} kcal", Modifier.weight(1f))
+            MetricTile("最长连续", "${state.bestStreak} 天", Modifier.weight(1f))
         }
 
-        AppCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("热量来源分布", style = MaterialTheme.typography.titleMedium)
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                SectionHeader("热量来源分布")
                 MealType.entries.forEach { meal ->
                     val share = state.mealShare[meal] ?: 0f
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -54,6 +60,8 @@ fun StatsScreen(vm: StatsViewModel) {
                         LinearProgressIndicator(
                             progress = { share },
                             modifier = Modifier.weight(1f).height(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.outlineVariant,
                         )
                         Text(
                             text = "${(share * 100).toInt()}%",
@@ -65,30 +73,18 @@ fun StatsScreen(vm: StatsViewModel) {
             }
         }
 
-        AppCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("当前连续 ${state.currentStreak} 天", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "三餐都记上才算完整打卡，加餐只算热量。断一天连击就从头开始。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                SectionHeader(
+                    title = "当前连续 ${state.currentStreak} 天",
+                    subtitle = "三餐都记上才算完整打卡，加餐只算热量。断一天连击就从头开始。",
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 Text(
                     "有记录 ${state.trackedDays} 天 · 30 天累计 ${state.totalKcal.toInt()} kcal",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun StatCard(title: String, value: String, modifier: Modifier = Modifier) {
-    AppCard(modifier) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
     }
 }

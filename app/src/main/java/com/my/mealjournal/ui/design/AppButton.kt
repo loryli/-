@@ -3,6 +3,7 @@ package com.my.mealjournal.ui.design
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -14,7 +15,7 @@ import androidx.compose.ui.Modifier
 enum class AppButtonStyle { Primary, Secondary, Text }
 
 /**
- * 统一按钮：主操作实心绿，次操作描边，文字操作用主色。
+ * 统一按钮：主操作实心绿，次操作描边，文字操作用主色；destructive 只支持 Text，用错误色。
  * 最小高度 48dp，字号随系统缩放。
  */
 @Composable
@@ -24,6 +25,7 @@ fun AppButton(
     modifier: Modifier = Modifier,
     style: AppButtonStyle = AppButtonStyle.Primary,
     enabled: Boolean = true,
+    destructive: Boolean = false,
 ) {
     val size = Modifier.heightIn(min = Spacing.buttonHeight)
     val pad = PaddingValues(horizontal = Spacing.xl, vertical = Spacing.sm)
@@ -51,6 +53,11 @@ fun AppButton(
             enabled = enabled,
             shape = MaterialTheme.shapes.small,
             contentPadding = pad,
+            colors = if (destructive) {
+                ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            } else {
+                ButtonDefaults.textButtonColors()
+            },
         ) { Text(text, style = MaterialTheme.typography.labelLarge) }
     }
 }

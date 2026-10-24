@@ -145,3 +145,55 @@
 - 1.3× 下四餐单卡变长，需滚动才能看全；状态行已用 `FlowRow`，不再折行。
 - 面板仍是「标题/餐次/搜索/分类/最近/列表/输入」七层，留给下一轮。
 
+## 9. 第三阶段 P2：四页 + 添加面板收尾（2026-10-24）
+
+用户拍板：范围全做（四页 + 面板/弹窗一次收尾）；「我的食物」删除用**直接删 + 4 秒撤销 Snackbar**（与 R4 轮全 App 既定模式一致），本文件 §7 里「删除确认」的说法作废。
+
+### 9.1 新增设计组件（`ui/design/`）
+
+| 组件 | 说明 |
+| --- | --- |
+| `MetricTile(label, value)` | 统计指标瓦片：SurfaceCard + labelMedium 标签 + titleLarge Bold 数值 |
+| `EmptyState(title, hint)` | 居中弱化文字空态，不引图标 |
+| `AppTextField(...)` | OutlinedTextField 薄封装：12dp 圆角、静止描边 outlineVariant（与 AppChip 一致）、聚焦主色 |
+| `StatusToken`（`DayStatus.statusStyle()`） | 三态统一配色与文案：COMPLETE=primaryContainer「记满」、PARTIAL=tertiaryContainer「部分」、MISSING=surfaceVariant「未记录」；今日页胶囊、日历格子、图例共用 |
+| `AppButton(destructive = true)` | Text 风格可用 error 色，用于「删除」类操作 |
+
+另从面板与编辑弹窗抽出共用的 `PortionEditor`（克/份切换 + AmountInput + 热量预览，trailing 插槽挂「添加」按钮），消除两处 ~60 行重复。
+
+### 9.2 添加面板与弹窗
+
+- `AddEntrySheet` 七层压三层：①标题 +「记到 X」副标题（或 FAB 入口的餐次 chips）+ 自定义；②搜索（AppTextField + 搜索图标）+ 分类；③结果区（最近记录 + ListRow 食物列表）+ 选中后的份量录入浮出。`height(300.dp)` 硬编码移除，列表按剩余空间填充。
+- 食物行从手写 Row 改 `ListRow`（min 56dp 触控）；搜索无结果时显示 `EmptyState`。
+- 「最近记录」每次打开面板刷新（`LaunchedEffect` 调 `picker.refreshRecent()`）——旧行为只在 ViewModel 创建时加载一次，刚记过的食物要重开 App 才出现，顺手修掉。
+- **实现坑**：把「最近记录」作为条件 `item(key=...)` 放进 LazyColumn 时，状态到达后该 item 不渲染（条件为真也不出现）；移回 LazyColumn 外做兄弟节点即正常。原因未深究，记录在此避免再踩。
+- `CustomFoodDialog` / `EditEntryDialog`：输入框换 `AppTextField`、按钮换 `AppButton`，编辑弹窗删除按钮 destructive 红字，保存按钮在克数非法时禁用。
+
+### 9.3 四个页面
+
+- **日历**：页面边距 16→`Spacing.page`；月份标题升 headlineSmall；格子与图例改用 `StatusToken`，图例文案与今日页胶囊统一为「记满/部分/未记录」；删死代码 `daysBetween()`。格子圆角维持 12dp（16dp 在该尺寸过圆，有意决策）。
+- **统计**：`StatCard` → `MetricTile`×4；占比条显式 `trackColor=outlineVariant` + `color=primary`，与今日页进度条轨道统一；卡内标题用 `SectionHeader`；间距全走 `Spacing`。
+- **我的食物**：去掉嵌套 Scaffold，改今日页同款 `Box` + 列表 + FAB（primaryContainer）+ SnackbarHost；列表改单张 `SurfaceCard(padding=0)` 内 `ListRow` + 分隔线（同四餐卡）；空态换 `EmptyState`；删除改「直接删 + 4 秒撤销」，`FoodsViewModel.undoDelete()` + `repo.restoreFood(food)` **按原 id 插回**（无外键，entries 的 foodId 关联随之恢复）；列表底部 120dp 让位 FAB。
+- **设置**：档位实心药丸 → `AppChip`；「保存」「导出 CSV」→ `AppButton`；自定义输入 → `AppTextField`，常显「自定义范围 600–6000 kcal」提示、超范围禁用保存（原来是静默不生效）；提醒卡改两行 `ListRow`：「开启提醒」+Switch（整行可点）、「提醒时间」+右侧主色时间（点开平台 TimePickerDialog，48dp 触控高）；卡内标题用 `SectionHeader`。
+- **NavigationBar 维持默认**：指示器经主题映射已是 primaryContainer 药丸，与 AppChip 选中态语义一致，视为已统一，不自绘导航栏。
+- `ui/Cards.kt` 的 `AppCard` 兼容层在四页迁移完成后零引用，已删除。
+
+### 9.4 验证（2026-10-24，模拟器 Pixel 6 / API 35，清数据后实测）
+
+| 项 | 结果 |
+| --- | --- |
+| `:app:assembleDebug` | BUILD SUCCESSFUL |
+| `:app:testDebugUnitTest` | 8 suite / 30 用例 / 0 失败 |
+| 浅色 | `p3-today-light.png`、`p3-calendar-light.png`、`p3-stats-light.png`、`p3-foods-light.png`、`p3-settings-light.png`、`p3-panel-light.png` |
+| 深色 | `p3-calendar-dark.png`、`p3-stats-dark.png`、`p3-foods-dark.png`、`p3-settings-dark.png`、`p3-panel-dark.png` |
+| 1.3× 字号 | `p3-today-font130.png`、`p3-settings-font130.png`、`p3-panel-font130.png` |
+| 行为走查 | 点早餐卡开面板（「记到 早餐」）；最近记录 chip 一步直记（417 kcal、Snackbar 已记/撤销）；选三文鱼 → 克/份切换与「约 139 kcal · 100 g」预览；状态胶囊新文案「部分」；新建自定义食物 TestNoodle → 列表 ListRow；删除 → 撤销（DB 验证按原 id 恢复）；空态组件渲染；日历横滑 10 月→11 月 |
+
+### 9.5 遗留
+
+1. 面板在无键盘时列表占满剩余高度，整体偏高；可考虑限高或半展开态。
+2. 设置导出结果仍是内联文字，未换 Snackbar。
+3. 「提醒时间」行在开关关闭时仍可点击，且 `setReminderMinute` 总是 `apply(true)`（沿袭旧逻辑），是否要联动开关待业务层确认。
+4. 今日页 FAB 压最后一行（P1 遗留，见 §8.4）。
+5. 「最近记录」条件 item 在 LazyColumn 内不渲染的原因未查明（见 §9.2），当前用兄弟节点规避。
+

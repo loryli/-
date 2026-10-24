@@ -129,6 +129,11 @@ class MealRepository(private val db: MealDatabase) {
         if (!food.isBuiltin) foodDao.delete(food)
     }
 
+    /** 撤销删除：带着原 id 插回，条目与最近记录的 foodId 关联随之恢复。 */
+    suspend fun restoreFood(food: FoodEntity) {
+        if (!food.isBuiltin) foodDao.insert(food)
+    }
+
     suspend fun exportCsv(): String {
         val rows = entryDao.all().map { entity ->
             CsvExporter.Row(

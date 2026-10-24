@@ -145,7 +145,8 @@ class FoodPickerViewModel(private val repo: MealRepository) : ViewModel() {
         refreshRecent()
     }
 
-    private fun refreshRecent() {
+    /** 每次打开面板时调一次：刚记过的食物要立刻出现在「最近记录」里。 */
+    fun refreshRecent() {
         viewModelScope.launch {
             _recent.value = repo.recentFoods().map { food ->
                 val last = repo.lastGrams(food.id)

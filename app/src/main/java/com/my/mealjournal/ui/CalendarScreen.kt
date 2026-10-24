@@ -37,9 +37,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.my.mealjournal.domain.DayStatus
+import com.my.mealjournal.ui.design.Spacing
+import com.my.mealjournal.ui.design.statusStyle
 import java.time.LocalDate
-import java.time.YearMonth
-import java.time.temporal.ChronoUnit
 
 @Composable
 fun CalendarScreen(vm: CalendarViewModel, onPickDate: (LocalDate) -> Unit) {
@@ -50,16 +50,16 @@ fun CalendarScreen(vm: CalendarViewModel, onPickDate: (LocalDate) -> Unit) {
     val daysInMonth = month.lengthOfMonth()
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = Spacing.page),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = Spacing.md)) {
             IconButton(onClick = { vm.shiftMonth(-1) }) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上个月")
             }
             Text(
                 text = month.label(),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
@@ -123,7 +123,6 @@ fun CalendarScreen(vm: CalendarViewModel, onPickDate: (LocalDate) -> Unit) {
         }
 
         Legend()
-        Spacer(Modifier.height(8.dp))
         Text(
             text = "点任意日期回看当天记录；只有最近 7 天可以补记或修改。",
             style = MaterialTheme.typography.bodySmall,
@@ -140,17 +139,9 @@ private fun DayCell(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val background = when (status) {
-        DayStatus.COMPLETE -> MaterialTheme.colorScheme.primaryContainer
-        DayStatus.PARTIAL -> MaterialTheme.colorScheme.tertiaryContainer
-        DayStatus.MISSING -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    val foreground = when (status) {
-        DayStatus.COMPLETE -> MaterialTheme.colorScheme.onPrimaryContainer
-        DayStatus.PARTIAL -> MaterialTheme.colorScheme.onTertiaryContainer
-        DayStatus.MISSING -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val style = status.statusStyle()
     val isToday = date == LocalDate.now()
+    // 小格用 12dp 圆角：卡片档的 16dp 在这个尺寸会过圆
     Box(
         modifier = modifier
             .aspectRatio(0.82f)
@@ -159,45 +150,40 @@ private fun DayCell(
                 color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
                 shape = MaterialTheme.shapes.small,
             )
-            .background(background, MaterialTheme.shapes.small)
+            .background(style.container, MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
-            .padding(4.dp),
+            .padding(Spacing.xs),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = foreground,
+                color = style.content,
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
             )
             if (kcal > 0) {
                 Text(
                     text = kcal.toInt().toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = foreground.copy(alpha = 0.75f),
+                    color = style.content.copy(alpha = 0.75f),
                 )
             }
         }
     }
 }
 
+/** 图例与今日页状态胶囊共用一套三态色。 */
 @Composable
 private fun Legend() {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        LegendDot(MaterialTheme.colorScheme.primaryContainer, "三餐记满")
-        LegendDot(MaterialTheme.colorScheme.tertiaryContainer, "记了一部分")
-        LegendDot(MaterialTheme.colorScheme.surfaceVariant, "没记录")
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+        DayStatus.entries.forEach { status ->
+            val style = status.statusStyle()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(10.dp).height(10.dp).background(style.container, CircleShape))
+                Spacer(Modifier.width(Spacing.xs))
+                Text(style.label, style = MaterialTheme.typography.labelSmall)
+            }
+        }
     }
 }
-
-@Composable
-private fun LegendDot(color: Color, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(10.dp).height(10.dp).background(color, CircleShape))
-        Spacer(Modifier.width(4.dp))
-        Text(text, style = MaterialTheme.typography.labelSmall)
-    }
-}
-
-fun daysBetween(from: YearMonth, to: YearMonth): Long = ChronoUnit.MONTHS.between(from, to)
