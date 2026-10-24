@@ -227,7 +227,7 @@
 | --- | --- |
 | `:app:assembleDebug` | BUILD SUCCESSFUL |
 | `:app:testDebugUnitTest` | 9 suite / 37 用例 / 0 失败（NutritionTest 7 个新用例） |
-| **v2→v3 升级迁移** | 旧版（`eed7c7c`）记「三文鱼 100g」→ 装新版：条目原样保留，营养回填 蛋白 17.2 / 碳水 0 / 脂肪 7.8；161 条内置食物营养 0 缺失；schema 9+3 列齐全 |
+| **v2→v3 升级迁移** | 旧版（`eed7c7c`）记「三文鱼 100g」→ 装新版：条目原样保留，营养回填 蛋白 17.2 / 碳水 0 / 脂肪 7.8；159 条内置食物营养 0 缺失；schema 9+3 列齐全 |
 | 清数据走查 | 河粉 1 碗（碳水 59/225 g）+ 鸡蛋 1 个（蛋白 9/90、脂肪 5/60）三色条与热量环联动正确 |
 | 浅色 | `p4-today-light.png`、`p4-calendar-light.png`、`p4-stats-light.png`、`p4-foods-light.png`、`p4-settings-light.png`、`p4-panel-light.png` |
 | 深色 | `p4-today-dark.png`、`p4-stats-dark.png`、`p4-panel-dark.png` |

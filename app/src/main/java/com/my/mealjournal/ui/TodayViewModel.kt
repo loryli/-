@@ -7,6 +7,8 @@ import com.my.mealjournal.data.EntryView
 import com.my.mealjournal.data.FoodEntity
 import com.my.mealjournal.data.MealRepository
 import com.my.mealjournal.data.SettingsStore
+import com.my.mealjournal.domain.AchievementSnapshot
+import com.my.mealjournal.domain.Achievements
 import com.my.mealjournal.domain.DayEntry
 import com.my.mealjournal.domain.DayEvaluator
 import com.my.mealjournal.domain.DayStatus
@@ -17,9 +19,12 @@ import com.my.mealjournal.domain.Nutrition
 import com.my.mealjournal.domain.StreakCalculator
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -96,11 +101,30 @@ class TodayViewModel(
     private var lastAddedId: Long? = null
     private var lastDeleted: EntryEntity? = null
 
+    /** 添加后的反馈文案：记满庆祝 / 成就解锁，UI 拿去弹 Snackbar（带撤销）。 */
+    private val _addFeedback = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val addFeedback: SharedFlow<String> = _addFeedback.asSharedFlow()
+
     fun addEntry(food: FoodEntity, grams: Double, meal: MealType) {
+        val wasComplete = state.value.status == DayStatus.COMPLETE
         viewModelScope.launch {
+            val before = repo.achievementSnapshot().unlockedIds()
             lastAddedId = repo.addEntry(_date.value, meal, food, grams)
+            val justUnlocked = Achievements.evaluate(repo.achievementSnapshot())
+                .filter { it.unlocked && it.def.id !in before }
+            val message = buildString {
+                append("已记 ${food.name}")
+                if (!wasComplete && repo.statusOf(_date.value) == DayStatus.COMPLETE) {
+                    append(" · 今天记满三餐 🎉")
+                }
+                justUnlocked.forEach { append(" · 解锁「${it.def.title}」") }
+            }
+            _addFeedback.emit(message)
         }
     }
+
+    private fun AchievementSnapshot.unlockedIds(): Set<String> =
+        Achievements.evaluate(this).filter { it.unlocked }.map { it.def.id }.toSet()
 
     fun undoAdd() {
         val id = lastAddedId ?: return

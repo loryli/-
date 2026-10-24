@@ -1,6 +1,8 @@
 package com.my.mealjournal.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -113,6 +115,18 @@ fun TodayScreen(vm: TodayViewModel) {
         }
     }
 
+    // 添加后的反馈（记满庆祝 / 成就解锁）由 VM 推过来，撤销动作挂在同一条 Snackbar 上
+    LaunchedEffect(Unit) {
+        vm.addFeedback.collect { message ->
+            val result = snackbar.showSnackbar(
+                message = message,
+                actionLabel = "撤销",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) vm.undoAdd()
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -178,7 +192,6 @@ fun TodayScreen(vm: TodayViewModel) {
             onAdd = { food, grams, chosen ->
                 vm.addEntry(food, grams, chosen)
                 addingMeal = null
-                offerUndo("已记 ${food.name}", "撤销") { vm.undoAdd() }
             },
         )
     }

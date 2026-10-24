@@ -72,6 +72,10 @@ interface EntryDao {
     @Query("SELECT * FROM entries ORDER BY date, createdAt")
     suspend fun all(): List<EntryEntity>
 
+    /** 全量观察：统计与成就计算用，个人数据量级下开销可忽略。 */
+    @Query("SELECT * FROM entries ORDER BY date, createdAt")
+    fun observeAll(): Flow<List<EntryEntity>>
+
     @Query("SELECT * FROM entries WHERE id = :id")
     suspend fun byId(id: Long): EntryEntity?
 

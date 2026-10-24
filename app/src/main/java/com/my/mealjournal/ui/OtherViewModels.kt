@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.my.mealjournal.data.FoodEntity
 import com.my.mealjournal.data.MealRepository
 import com.my.mealjournal.data.SettingsStore
+import com.my.mealjournal.domain.AchievementState
+import com.my.mealjournal.domain.Achievements
 import com.my.mealjournal.domain.DayEntry
 import com.my.mealjournal.domain.DayEvaluator
 import com.my.mealjournal.domain.DayStatus
@@ -19,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -95,6 +98,9 @@ data class StatsUiState(
     val mealKcal: Map<MealType, Double>,
     val totalKcal: Double,
     val macroShare: MacroGrams = MacroGrams(0.0, 0.0, 0.0),
+    val thisWeekDays: Int = 0,
+    val lastWeekDays: Int = 0,
+    val achievements: List<AchievementState> = emptyList(),
 ) {
     val mealShare: Map<MealType, Float>
         get() = if (totalKcal <= 0) MealType.entries.associateWith { 0f }
@@ -104,20 +110,30 @@ data class StatsUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class StatsViewModel(repo: MealRepository, settings: SettingsStore) : ViewModel() {
 
+    /** 全量数据一个源：近 30 天指标、本周小结、成就都从这里派生。 */
     val state: StateFlow<StatsUiState> = combine(
-        repo.entriesBetween(LocalDate.now().minusDays(29), LocalDate.now()),
+        repo.allEntries(),
         settings.goalKcal,
     ) { entries, goal ->
         val today = LocalDate.now()
-        val byDate = entries.groupBy { it.date }
+        val recent = entries.filter { !it.date.isBefore(today.minusDays(29)) }
+        val byDate = recent.groupBy { it.date }
         val statuses = byDate.mapValues { (_, list) -> DayEvaluator.statusOf(list.map { DayEntry(it.meal, it.kcal) }) }
         val mealKcal = MealType.entries.associateWith { meal ->
-            entries.filter { it.meal == meal }.sumOf { it.kcal }
+            recent.filter { it.meal == meal }.sumOf { it.kcal }
         }
         val totals = byDate.mapValues { (_, list) -> DayEvaluator.totalKcal(list.map { DayEntry(it.meal, it.kcal) }) }
-        val macro = entries.fold(MacroGrams(0.0, 0.0, 0.0)) { acc, e ->
+        val macro = recent.fold(MacroGrams(0.0, 0.0, 0.0)) { acc, e ->
             acc + MacroGrams(e.protein, e.carbs, e.fat)
         }
+
+        // 本周小结：周一起算，本周只数到今天
+        val weekStart = today.with(java.time.DayOfWeek.MONDAY)
+        val allStatuses = entries.groupBy { it.date }
+            .mapValues { (_, list) -> DayEvaluator.statusOf(list.map { DayEntry(it.meal, it.kcal) }) }
+        val thisWeekDays = allStatuses.count { (day, s) -> s != DayStatus.MISSING && !day.isBefore(weekStart) && !day.isAfter(today) }
+        val lastWeekDays = allStatuses.count { (day, s) -> s != DayStatus.MISSING && day.isBefore(weekStart) && !day.isBefore(weekStart.minusWeeks(1)) }
+
         StatsUiState(
             trackedDays = statuses.count { it.value != DayStatus.MISSING },
             trackedDaysWithGoal = statuses.count { it.value == DayStatus.COMPLETE },
@@ -128,6 +144,9 @@ class StatsViewModel(repo: MealRepository, settings: SettingsStore) : ViewModel(
             mealKcal = mealKcal,
             totalKcal = totals.values.sum(),
             macroShare = Nutrition.shares(macro),
+            thisWeekDays = thisWeekDays,
+            lastWeekDays = lastWeekDays,
+            achievements = Achievements.evaluate(Achievements.snapshotOf(allStatuses, entries.size)),
         )
     }.stateIn(
         viewModelScope,
@@ -156,8 +175,40 @@ class StatsViewModel(repo: MealRepository, settings: SettingsStore) : ViewModel(
 
 class FoodsViewModel(private val repo: MealRepository) : ViewModel() {
 
-    val foods: StateFlow<List<FoodEntity>> = repo.customFoods()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** 「自定义」作为虚拟分类出现在 chips 里，只列自建食物。 */
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
+
+    private val _category = MutableStateFlow<String?>(null)
+    val category: StateFlow<String?> = _category.asStateFlow()
+
+    /** 全库浏览：搜索 + 分类过滤，内置在前自建在后。 */
+    val foods: StateFlow<List<FoodEntity>> = combine(repo.foods(""), _query, _category) { all, q, c ->
+        val byQuery = if (q.isBlank()) all else all.filter { it.name.contains(q) }
+        when (c) {
+            null -> byQuery
+            CUSTOM_CATEGORY -> byQuery.filter { !it.isBuiltin }
+            else -> byQuery.filter { it.category == c }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val categories: StateFlow<List<String>> = repo.foods("").map { list ->
+        val present = FoodPickerViewModel.CATEGORY_ORDER.filter { cat -> list.any { it.category == cat } }
+        if (list.any { !it.isBuiltin }) present + CUSTOM_CATEGORY else present
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 页面副标题：内置/自建各多少种。 */
+    val summary: StateFlow<Pair<Int, Int>> = repo.foods("").map { list ->
+        list.count { it.isBuiltin } to list.count { !it.isBuiltin }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0 to 0)
+
+    fun search(text: String) {
+        _query.value = text
+    }
+
+    fun selectCategory(value: String?) {
+        _category.value = value
+    }
 
     fun add(
         name: String,
@@ -187,6 +238,10 @@ class FoodsViewModel(private val repo: MealRepository) : ViewModel() {
         val food = lastDeleted ?: return
         lastDeleted = null
         viewModelScope.launch { repo.restoreFood(food) }
+    }
+
+    companion object {
+        const val CUSTOM_CATEGORY = "自定义"
     }
 }
 

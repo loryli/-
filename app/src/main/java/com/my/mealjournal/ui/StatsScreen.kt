@@ -3,6 +3,7 @@ package com.my.mealjournal.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,9 +18,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.my.mealjournal.domain.AchievementState
 import com.my.mealjournal.domain.MealType
 import com.my.mealjournal.ui.design.MetricTile
 import com.my.mealjournal.ui.design.SectionHeader
@@ -40,6 +44,36 @@ fun StatsScreen(vm: StatsViewModel) {
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Text("最近 30 天", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+        SurfaceCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                SectionHeader("本周小结", subtitle = "周一到现在")
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = "已记录 ${state.thisWeekDays} 天",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    val delta = state.thisWeekDays - state.lastWeekDays
+                    val text = when {
+                        state.lastWeekDays == 0 && state.thisWeekDays > 0 -> "上周没有记录，这周动起来了"
+                        delta > 0 -> "比上周多 $delta 天"
+                        delta < 0 -> "比上周少 ${-delta} 天"
+                        else -> "与上周持平"
+                    }
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (delta > 0 || (state.lastWeekDays == 0 && state.thisWeekDays > 0)) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
             MetricTile("当前连续", "${state.currentStreak} 天", Modifier.weight(1f))
@@ -104,6 +138,46 @@ fun StatsScreen(vm: StatsViewModel) {
                     }
                 }
             }
+        }
+
+        SectionHeader(
+            title = "成就",
+            subtitle = "坚持的证物 · 全部本地记录推导",
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
+        state.achievements.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                row.forEach { badge -> BadgeCard(badge, Modifier.weight(1f)) }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BadgeCard(badge: AchievementState, modifier: Modifier = Modifier) {
+    SurfaceCard(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = badge.def.emoji,
+                fontSize = 24.sp,
+                modifier = Modifier.alpha(if (badge.unlocked) 1f else 0.35f),
+            )
+            Spacer(Modifier.width(Spacing.sm))
+            Column(Modifier.weight(1f)) {
+                Text(badge.def.title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = badge.def.desc,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = if (badge.unlocked) "已解锁" else "${badge.progress}/${badge.def.goal}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (badge.unlocked) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (badge.unlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.my.mealjournal.data
 
 import com.my.mealjournal.domain.CsvExporter
+import com.my.mealjournal.domain.DayStatus
 import com.my.mealjournal.domain.MealType
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
@@ -61,6 +62,34 @@ class MealRepository(private val db: MealDatabase) {
 
     fun entriesBetween(from: LocalDate, to: LocalDate): Flow<List<EntryView>> =
         entryDao.observeBetween(from.toString(), to.toString()).map { list -> list.map { it.toView() } }
+
+    /** 全量条目观察（统计/成就用）。 */
+    fun allEntries(): Flow<List<EntryView>> =
+        entryDao.observeAll().map { list -> list.map { it.toView() } }
+
+    /** 单日打卡状态（添加后判断是否刚记满）。 */
+    suspend fun statusOf(date: LocalDate): DayStatus {
+        val list = entryDao.forRange(date.toString(), date.toString())
+        return com.my.mealjournal.domain.DayEvaluator.statusOf(
+            list.map { com.my.mealjournal.domain.DayEntry(parseMeal(it.meal), it.kcal) },
+        )
+    }
+
+    /** 成就快照：全量条目按日聚合后交给 domain 推导。 */
+    suspend fun achievementSnapshot(): com.my.mealjournal.domain.AchievementSnapshot {
+        val entries = entryDao.all()
+        val statuses = entries
+            .groupBy { LocalDate.parse(it.date) }
+            .mapValues { (_, list) ->
+                com.my.mealjournal.domain.DayEvaluator.statusOf(
+                    list.map { com.my.mealjournal.domain.DayEntry(parseMeal(it.meal), it.kcal) },
+                )
+            }
+        return com.my.mealjournal.domain.Achievements.snapshotOf(statuses, entries.size)
+    }
+
+    private fun parseMeal(raw: String) =
+        runCatching { MealType.valueOf(raw) }.getOrDefault(MealType.SNACK)
 
     fun foods(query: String): Flow<List<FoodEntity>> =
         if (query.isBlank()) foodDao.observeAll() else foodDao.search(query)
